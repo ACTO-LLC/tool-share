@@ -36,7 +36,7 @@ resource appService 'Microsoft.Web/sites@2023-01-01' = {
     serverFarmId: appServicePlanId
     httpsOnly: true
     siteConfig: {
-      linuxFxVersion: 'DOCKER|mcr.microsoft.com/azure-databases/data-api-builder:1.7.0-rc' // v1.7 RC for MCP support
+      linuxFxVersion: 'DOCKER|mcr.microsoft.com/azure-databases/data-api-builder:1.7.81-rc' // Latest 1.7 RC with MCP support
       alwaysOn: false
       http20Enabled: true
       minTlsVersion: '1.2'

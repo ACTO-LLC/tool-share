@@ -19,9 +19,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # Data API Builder (v1.7 RC for MCP support)
+  # Data API Builder (v1.7.81-rc with MCP support)
   dataapi:
-    image: mcr.microsoft.com/azure-databases/data-api-builder:1.7.0-rc
+    image: mcr.microsoft.com/azure-databases/data-api-builder:1.7.81-rc
     container_name: toolshare-dab
     ports:
       - "5000:5000"

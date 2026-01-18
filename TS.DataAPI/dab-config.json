@@ -1,0 +1,337 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/download/v1.1.7/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('DATABASE_CONNECTION_STRING')"
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api"
+    },
+    "graphql": {
+      "enabled": true,
+      "path": "/graphql",
+      "allow-introspection": true
+    },
+    "host": {
+      "cors": {
+        "origins": ["http://localhost:5173", "http://localhost:3000"],
+        "allow-credentials": true
+      },
+      "authentication": {
+        "provider": "AzureAD",
+        "jwt": {
+          "audience": "@env('AZURE_AD_B2C_CLIENT_ID')",
+          "issuer": "https://@env('AZURE_AD_B2C_TENANT_NAME').b2clogin.com/@env('AZURE_AD_B2C_TENANT_ID')/v2.0/"
+        }
+      }
+    }
+  },
+  "entities": {
+    "User": {
+      "source": "dbo.Users",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            {
+              "action": "update",
+              "policy": { "database": "@claims.oid eq @item.externalId" }
+            }
+          ]
+        }
+      ],
+      "relationships": {
+        "tools": {
+          "cardinality": "many",
+          "target.entity": "Tool",
+          "source.fields": ["id"],
+          "target.fields": ["ownerId"]
+        },
+        "reservationsAsBorrower": {
+          "cardinality": "many",
+          "target.entity": "Reservation",
+          "source.fields": ["id"],
+          "target.fields": ["borrowerId"]
+        },
+        "circleMemberships": {
+          "cardinality": "many",
+          "target.entity": "CircleMember",
+          "source.fields": ["id"],
+          "target.fields": ["userId"]
+        }
+      }
+    },
+    "Circle": {
+      "source": "dbo.Circles",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "create" },
+            { "action": "read" },
+            {
+              "action": "update",
+              "policy": { "database": "@claims.oid in (SELECT u.externalId FROM dbo.Users u INNER JOIN dbo.CircleMembers cm ON u.id = cm.userId WHERE cm.circleId = @item.id AND cm.role IN ('admin', 'owner'))" }
+            }
+          ]
+        }
+      ],
+      "relationships": {
+        "members": {
+          "cardinality": "many",
+          "target.entity": "CircleMember",
+          "source.fields": ["id"],
+          "target.fields": ["circleId"]
+        },
+        "toolCircles": {
+          "cardinality": "many",
+          "target.entity": "ToolCircle",
+          "source.fields": ["id"],
+          "target.fields": ["circleId"]
+        }
+      }
+    },
+    "CircleMember": {
+      "source": "dbo.CircleMembers",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" },
+            { "action": "delete" }
+          ]
+        }
+      ],
+      "relationships": {
+        "user": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["userId"],
+          "target.fields": ["id"]
+        },
+        "circle": {
+          "cardinality": "one",
+          "target.entity": "Circle",
+          "source.fields": ["circleId"],
+          "target.fields": ["id"]
+        }
+      }
+    },
+    "Tool": {
+      "source": "dbo.Tools",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "create" },
+            { "action": "read" },
+            {
+              "action": "update",
+              "policy": { "database": "@claims.oid eq (SELECT u.externalId FROM dbo.Users u WHERE u.id = @item.ownerId)" }
+            },
+            {
+              "action": "delete",
+              "policy": { "database": "@claims.oid eq (SELECT u.externalId FROM dbo.Users u WHERE u.id = @item.ownerId)" }
+            }
+          ]
+        }
+      ],
+      "relationships": {
+        "owner": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["ownerId"],
+          "target.fields": ["id"]
+        },
+        "photos": {
+          "cardinality": "many",
+          "target.entity": "ToolPhoto",
+          "source.fields": ["id"],
+          "target.fields": ["toolId"]
+        },
+        "toolCircles": {
+          "cardinality": "many",
+          "target.entity": "ToolCircle",
+          "source.fields": ["id"],
+          "target.fields": ["toolId"]
+        },
+        "reservations": {
+          "cardinality": "many",
+          "target.entity": "Reservation",
+          "source.fields": ["id"],
+          "target.fields": ["toolId"]
+        }
+      }
+    },
+    "ToolPhoto": {
+      "source": "dbo.ToolPhotos",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" },
+            { "action": "delete" }
+          ]
+        }
+      ],
+      "relationships": {
+        "tool": {
+          "cardinality": "one",
+          "target.entity": "Tool",
+          "source.fields": ["toolId"],
+          "target.fields": ["id"]
+        }
+      }
+    },
+    "ToolCircle": {
+      "source": "dbo.ToolCircles",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" },
+            { "action": "delete" }
+          ]
+        }
+      ],
+      "relationships": {
+        "tool": {
+          "cardinality": "one",
+          "target.entity": "Tool",
+          "source.fields": ["toolId"],
+          "target.fields": ["id"]
+        },
+        "circle": {
+          "cardinality": "one",
+          "target.entity": "Circle",
+          "source.fields": ["circleId"],
+          "target.fields": ["id"]
+        }
+      }
+    },
+    "Reservation": {
+      "source": "dbo.Reservations",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" },
+            { "action": "update" }
+          ]
+        }
+      ],
+      "relationships": {
+        "tool": {
+          "cardinality": "one",
+          "target.entity": "Tool",
+          "source.fields": ["toolId"],
+          "target.fields": ["id"]
+        },
+        "borrower": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["borrowerId"],
+          "target.fields": ["id"]
+        },
+        "photos": {
+          "cardinality": "many",
+          "target.entity": "LoanPhoto",
+          "source.fields": ["id"],
+          "target.fields": ["reservationId"]
+        },
+        "reviews": {
+          "cardinality": "many",
+          "target.entity": "Review",
+          "source.fields": ["id"],
+          "target.fields": ["reservationId"]
+        }
+      }
+    },
+    "LoanPhoto": {
+      "source": "dbo.LoanPhotos",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" }
+          ]
+        }
+      ],
+      "relationships": {
+        "reservation": {
+          "cardinality": "one",
+          "target.entity": "Reservation",
+          "source.fields": ["reservationId"],
+          "target.fields": ["id"]
+        }
+      }
+    },
+    "Review": {
+      "source": "dbo.Reviews",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            { "action": "read" },
+            { "action": "create" }
+          ]
+        }
+      ],
+      "relationships": {
+        "reservation": {
+          "cardinality": "one",
+          "target.entity": "Reservation",
+          "source.fields": ["reservationId"],
+          "target.fields": ["id"]
+        },
+        "reviewer": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["reviewerId"],
+          "target.fields": ["id"]
+        },
+        "reviewee": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["revieweeId"],
+          "target.fields": ["id"]
+        }
+      }
+    },
+    "Notification": {
+      "source": "dbo.Notifications",
+      "permissions": [
+        {
+          "role": "authenticated",
+          "actions": [
+            {
+              "action": "read",
+              "policy": { "database": "@claims.oid eq (SELECT u.externalId FROM dbo.Users u WHERE u.id = @item.userId)" }
+            },
+            {
+              "action": "update",
+              "fields": { "include": ["isRead"] },
+              "policy": { "database": "@claims.oid eq (SELECT u.externalId FROM dbo.Users u WHERE u.id = @item.userId)" }
+            }
+          ]
+        }
+      ],
+      "relationships": {
+        "user": {
+          "cardinality": "one",
+          "target.entity": "User",
+          "source.fields": ["userId"],
+          "target.fields": ["id"]
+        }
+      }
+    }
+  }
+}

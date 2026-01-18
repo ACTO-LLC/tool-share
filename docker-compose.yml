@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # SQL Server for local development
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: toolshare-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=ToolShare123!
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "ToolShare123!" -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Data API Builder
+  dataapi:
+    image: mcr.microsoft.com/azure-databases/data-api-builder:latest
+    container_name: toolshare-dab
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./TS.DataAPI/dab-config.json:/App/dab-config.json:ro
+    environment:
+      - DATABASE_CONNECTION_STRING=Server=sqlserver;Database=ToolShare;User=sa;Password=ToolShare123!;TrustServerCertificate=True;
+      - AZURE_AD_B2C_CLIENT_ID=development
+      - AZURE_AD_B2C_TENANT_NAME=development
+      - AZURE_AD_B2C_TENANT_ID=development
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    command: ["--config", "/App/dab-config.json"]
+
+  # Azurite (Azure Storage Emulator)
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: toolshare-storage
+    ports:
+      - "10000:10000"  # Blob
+      - "10001:10001"  # Queue
+      - "10002:10002"  # Table
+    volumes:
+      - azurite-data:/data
+
+volumes:
+  sqlserver-data:
+  azurite-data:

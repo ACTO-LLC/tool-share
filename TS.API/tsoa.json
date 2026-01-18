@@ -1,0 +1,21 @@
+{
+  "entryFile": "src/app.ts",
+  "noImplicitAdditionalProperties": "throw-on-extras",
+  "controllerPathGlobs": ["src/routes/**/*.ts"],
+  "spec": {
+    "outputDirectory": ".",
+    "specVersion": 3,
+    "securityDefinitions": {
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "basePath": "/api"
+  },
+  "routes": {
+    "routesDir": "src/generated",
+    "authenticationModule": "src/middleware/auth.ts"
+  }
+}

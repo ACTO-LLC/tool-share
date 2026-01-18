@@ -1,0 +1,68 @@
+version: 2
+updates:
+  # Frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/TS.UI"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      react:
+        patterns:
+          - "react*"
+          - "@types/react*"
+      mui:
+        patterns:
+          - "@mui/*"
+      testing:
+        patterns:
+          - "vitest"
+          - "@testing-library/*"
+          - "cypress"
+          - "playwright"
+
+  # Backend dependencies
+  - package-ecosystem: "npm"
+    directory: "/TS.API"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      azure:
+        patterns:
+          - "@azure/*"
+      express:
+        patterns:
+          - "express"
+          - "@types/express"
+          - "tsoa"
+      testing:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "supertest"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"

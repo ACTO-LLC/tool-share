@@ -1,0 +1,36 @@
+# CODEOWNERS - Define code ownership for automatic PR review assignments
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+*                       @ACTO-LLC/tool-share-team
+
+# Frontend code
+/TS.UI/                 @ACTO-LLC/tool-share-team
+*.tsx                   @ACTO-LLC/tool-share-team
+*.ts                    @ACTO-LLC/tool-share-team
+
+# Backend code
+/TS.API/                @ACTO-LLC/tool-share-team
+
+# Data API Builder config
+/TS.DataAPI/            @ACTO-LLC/tool-share-team
+
+# Infrastructure
+/iac/                   @ACTO-LLC/tool-share-team
+*.bicep                 @ACTO-LLC/tool-share-team
+
+# Database
+/database/              @ACTO-LLC/tool-share-team
+*.sql                   @ACTO-LLC/tool-share-team
+
+# Documentation
+/docs/                  @ACTO-LLC/tool-share-team
+*.md                    @ACTO-LLC/tool-share-team
+
+# GitHub configuration
+/.github/               @ACTO-LLC/tool-share-team
+
+# Security-sensitive files
+.env*                   @ACTO-LLC/tool-share-team
+**/auth/                @ACTO-LLC/tool-share-team
+**/middleware/auth*     @ACTO-LLC/tool-share-team

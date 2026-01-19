@@ -303,6 +303,60 @@ git worktree add ../project-slice-3 -b feature/slice-3
 
 **Prevention:** Updated this playbook and ADR-010 with mandatory worktree setup. Updated strategy-planning playbook for all future projects.
 
+### 2026-01-18: Batching Tests After Features = Slow
+
+**Problem:** Wrote all features in Phases 1-3 without tests, then tried to add tests afterward with 3 parallel agents. Took 55+ minutes.
+
+**Impact:**
+- Agents had to configure Jest from scratch (not done during scaffolding)
+- Agents had to create missing hooks (`useNotifications`, `useCircles`) that should have existed
+- Agents hit dependency compatibility issues (date-fns v3 vs MUI)
+- Agents had huge scope (all tests for all features) instead of focused tasks
+
+**Root Cause:** Tests were not written WITH features. Test infrastructure was not configured during scaffolding.
+
+**Solution:**
+1. Configure test infrastructure during project scaffolding (Jest, Vitest, Playwright)
+2. Every feature PR must include its tests
+3. Agent prompts must specify: "Create X feature AND its tests"
+
+**Example agent prompt (correct):**
+```markdown
+Create NotificationBell component:
+1. NotificationBell.tsx - displays unread count badge
+2. NotificationBell.test.tsx - tests rendering and click behavior
+3. useNotifications.ts hook if needed + its test
+
+Tests must pass before committing.
+```
+
+**Prevention:** Added "Testing Requirements" section to strategy-planning playbook. Tests are now a deliverable for every feature, not a separate phase.
+
+### 2026-01-18: Missing Reusable Hooks
+
+**Problem:** Test agent had to CREATE `useCircles.ts` and `useNotifications.ts` hooks that should have existed from Phase 2-3 development.
+
+**Impact:**
+- Duplicated API call logic in multiple components
+- Test agent spent time creating hooks instead of just testing
+- Inconsistent data fetching patterns across components
+
+**Root Cause:** Feature agents embedded API calls directly in components instead of creating reusable hooks.
+
+**Solution:** Agent prompts must require hook creation:
+
+```markdown
+Create Circle Management feature:
+1. useCircles.ts hook - list, create, join, leave circles
+2. CirclesList.tsx - uses useCircles hook
+3. Tests for both hook and component
+```
+
+**Pattern to enforce:**
+- API calls → Custom hook (useX.ts)
+- Component → Uses hook, never calls API directly
+- Tests → Test hook with mocked API, test component with mocked hook
+
 ---
 
 *Last updated: 2026-01-18*

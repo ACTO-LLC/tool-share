@@ -120,17 +120,48 @@ export default function ToolDetail() {
     );
   }, [shouldUseMock, mockToolReservations, reservationsData, id]);
 
-  // Convert reservations to calendar events
+  // Color scheme for calendar events based on status
+  const eventColors = {
+    pending: { background: '#ff9800', border: '#f57c00', text: 'Pending' },     // Yellow/Orange
+    confirmed: { background: '#2196f3', border: '#1976d2', text: 'Confirmed' }, // Blue
+    active: { background: '#2196f3', border: '#1976d2', text: 'Active' },       // Blue
+    unavailable: { background: '#9e9e9e', border: '#757575', text: 'Blocked' }, // Gray
+  };
+
+  // Convert reservations to calendar events with color coding
   const calendarEvents = useMemo(() => {
-    return toolReservations.map((r) => ({
-      id: r.id,
-      title: r.status === 'pending' ? 'Pending' : 'Reserved',
-      start: r.startDate,
-      end: addDays(parseISO(r.endDate), 1).toISOString().split('T')[0], // FullCalendar end is exclusive
-      backgroundColor: r.status === 'pending' ? '#ff9800' : '#f44336',
-      borderColor: r.status === 'pending' ? '#ff9800' : '#f44336',
-    }));
-  }, [toolReservations]);
+    const events = toolReservations.map((r) => {
+      const colorScheme = eventColors[r.status as keyof typeof eventColors] || eventColors.confirmed;
+      return {
+        id: r.id,
+        title: colorScheme.text,
+        start: r.startDate,
+        end: addDays(parseISO(r.endDate), 1).toISOString().split('T')[0], // FullCalendar end is exclusive
+        backgroundColor: colorScheme.background,
+        borderColor: colorScheme.border,
+        textColor: '#ffffff',
+      };
+    });
+
+    // Add owner's blocked dates if tool has them
+    // Check if tool has blockedDates property (may be added via API extension)
+    const toolWithBlocked = displayTool as ApiTool & { blockedDates?: Array<{ start: string; end: string }> };
+    if (toolWithBlocked?.blockedDates && Array.isArray(toolWithBlocked.blockedDates)) {
+      toolWithBlocked.blockedDates.forEach((blocked, index) => {
+        events.push({
+          id: `blocked-${index}`,
+          title: 'Blocked',
+          start: blocked.start,
+          end: addDays(parseISO(blocked.end), 1).toISOString().split('T')[0],
+          backgroundColor: eventColors.unavailable.background,
+          borderColor: eventColors.unavailable.border,
+          textColor: '#ffffff',
+        });
+      });
+    }
+
+    return events;
+  }, [toolReservations, displayTool]);
 
   // TODO: Replace with actual current user check
   const isOwner = displayTool?.ownerId === mockCurrentUser.id;
@@ -410,10 +441,28 @@ export default function ToolDetail() {
                 </Alert>
               ) : (
                 <Alert severity="info" sx={{ mb: 2 }}>
-                  Select dates on the calendar to request a reservation. Red
-                  dates are already reserved.
+                  Click and drag on the calendar to select dates for your reservation request.
                 </Alert>
               )}
+              {/* Calendar Legend */}
+              <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 16, height: 16, bgcolor: '#4caf50', borderRadius: 0.5 }} />
+                  <Typography variant="caption">Available</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 16, height: 16, bgcolor: '#ff9800', borderRadius: 0.5 }} />
+                  <Typography variant="caption">Pending</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 16, height: 16, bgcolor: '#2196f3', borderRadius: 0.5 }} />
+                  <Typography variant="caption">Confirmed/Active</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 16, height: 16, bgcolor: '#9e9e9e', borderRadius: 0.5 }} />
+                  <Typography variant="caption">Blocked</Typography>
+                </Box>
+              </Box>
               <Box sx={{ '& .fc': { fontSize: '0.875rem' } }}>
                 <FullCalendar
                   plugins={[dayGridPlugin, interactionPlugin]}

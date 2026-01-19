@@ -10,11 +10,11 @@ services:
       - SA_PASSWORD=ToolShare123!
       - MSSQL_PID=Developer
     ports:
-      - "1433:1433"
+      - "14331:1433"
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "ToolShare123!" -Q "SELECT 1"
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "ToolShare123!" -C -Q "SELECT 1"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +24,7 @@ services:
     image: mcr.microsoft.com/azure-databases/data-api-builder:1.7.81-rc
     container_name: toolshare-dab
     ports:
-      - "5000:5000"
+      - "5001:5000"
     volumes:
       - ./TS.DataAPI/dab-config.json:/App/dab-config.json:ro
     environment:

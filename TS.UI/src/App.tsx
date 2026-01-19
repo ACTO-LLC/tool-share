@@ -12,14 +12,17 @@ import Circles from './pages/Circles';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 
+const isE2ETest = import.meta.env.VITE_E2E_TEST === 'true';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useIsAuthenticated();
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+  // Bypass auth check in E2E test mode
+  if (isE2ETest || isAuthenticated) {
+    return <>{children}</>;
   }
 
-  return <>{children}</>;
+  return <Navigate to="/login" replace />;
 }
 
 function App() {

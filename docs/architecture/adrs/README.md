@@ -23,6 +23,8 @@ An Architecture Decision Record captures a significant architectural decision al
 | [ADR-006](./ADR-006-blob-storage.md) | Azure Blob Storage for Images | Accepted | 2026-01-18 |
 | [ADR-007](./ADR-007-upcitemdb-api.md) | UPCitemdb for Tool Lookup | Accepted | 2026-01-18 |
 | [ADR-008](./ADR-008-stripe-payments.md) | Stripe for Subscription Payments | Accepted | 2026-01-18 |
+| [ADR-009](./ADR-009-playwright-e2e.md) | Playwright for E2E Testing | Accepted | 2026-01-18 |
+| [ADR-010](./ADR-010-feature-slice-development.md) | Feature-Slice Development Approach | Accepted | 2026-01-18 |
 
 ## Creating a New ADR
 

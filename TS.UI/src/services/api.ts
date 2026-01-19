@@ -238,6 +238,81 @@ export interface CreateReservationRequest {
   note?: string;
 }
 
+// ============================================================================
+// Loan Photo Types
+// ============================================================================
+
+export interface LoanPhoto {
+  id: string;
+  reservationId: string;
+  type: 'before' | 'after';
+  url: string;
+  uploadedBy: string;
+  notes?: string;
+  uploadedAt: string;
+}
+
+// ============================================================================
+// Review Types
+// ============================================================================
+
+export interface Review {
+  id: string;
+  reservationId: string;
+  reviewerId: string;
+  revieweeId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  reviewer?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  reviewee?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+}
+
+export interface UserReviewsResponse {
+  reviews: Review[];
+  averageRating: number;
+  totalReviews: number;
+}
+
+// ============================================================================
+// Notification Types
+// ============================================================================
+
+export type NotificationType =
+  | 'reservation_request'
+  | 'reservation_approved'
+  | 'reservation_declined'
+  | 'reservation_cancelled'
+  | 'pickup_reminder'
+  | 'return_reminder'
+  | 'loan_started'
+  | 'loan_completed'
+  | 'review_received';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  items: Notification[];
+  unreadCount: number;
+}
+
 // Reservation API methods
 export const reservationApi = {
   /**
@@ -329,6 +404,96 @@ export const reservationApi = {
    */
   async getDashboardStats(): Promise<DashboardStats> {
     return apiRequest<DashboardStats>('/api/reservations/stats/dashboard');
+  },
+
+  /**
+   * Upload a loan photo (before or after)
+   */
+  async uploadPhoto(id: string, file: File, type: 'before' | 'after', notes?: string): Promise<LoanPhoto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if (notes) {
+      formData.append('notes', notes);
+    }
+    return apiRequestFormData<LoanPhoto>(`/api/reservations/${id}/photos`, formData);
+  },
+
+  /**
+   * Get loan photos for a reservation
+   */
+  async getPhotos(id: string, type?: 'before' | 'after'): Promise<LoanPhoto[]> {
+    const queryParams = type ? `?type=${type}` : '';
+    return apiRequest<LoanPhoto[]>(`/api/reservations/${id}/photos${queryParams}`);
+  },
+
+  /**
+   * Submit a review for a completed reservation
+   */
+  async submitReview(id: string, rating: number, comment?: string): Promise<Review> {
+    return apiRequest<Review>(`/api/reservations/${id}/review`, {
+      method: 'POST',
+      body: { rating, comment },
+    });
+  },
+
+  /**
+   * Get reviews for a reservation
+   */
+  async getReviews(id: string): Promise<Review[]> {
+    return apiRequest<Review[]>(`/api/reservations/${id}/reviews`);
+  },
+};
+
+// ============================================================================
+// Notification API
+// ============================================================================
+
+export const notificationApi = {
+  /**
+   * Get notifications for the current user
+   */
+  async list(limit?: number): Promise<NotificationListResponse> {
+    const queryParams = limit ? `?limit=${limit}` : '';
+    return apiRequest<NotificationListResponse>(`/api/notifications${queryParams}`);
+  },
+
+  /**
+   * Get unread notification count
+   */
+  async getUnreadCount(): Promise<{ count: number }> {
+    return apiRequest<{ count: number }>('/api/notifications/unread-count');
+  },
+
+  /**
+   * Mark a notification as read
+   */
+  async markAsRead(id: string): Promise<Notification> {
+    return apiRequest<Notification>(`/api/notifications/${id}/read`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllAsRead(): Promise<{ success: boolean }> {
+    return apiRequest<{ success: boolean }>('/api/notifications/read-all', {
+      method: 'POST',
+    });
+  },
+};
+
+// ============================================================================
+// User Reviews API
+// ============================================================================
+
+export const reviewsApi = {
+  /**
+   * Get reviews for a specific user
+   */
+  async getUserReviews(userId: string): Promise<UserReviewsResponse> {
+    return apiRequest<UserReviewsResponse>(`/api/users/${userId}/reviews`);
   },
 };
 
@@ -579,5 +744,166 @@ export const userApi = {
   },
 };
 
+// ============================================================================
+// Circle Types
+// ============================================================================
+
+export interface CircleMember {
+  id: string;
+  userId: string;
+  role: 'member' | 'admin' | 'owner';
+  joinedAt: string;
+  user?: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl?: string;
+    reputationScore: number;
+  };
+}
+
+export interface CircleTool {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  brand?: string;
+  model?: string;
+  status: string;
+  owner?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  primaryPhotoUrl?: string;
+}
+
+export interface Circle {
+  id: string;
+  name: string;
+  description?: string;
+  inviteCode: string;
+  isPublic: boolean;
+  createdBy: string;
+  createdAt: string;
+  memberCount?: number;
+  currentUserRole?: 'member' | 'admin' | 'owner';
+}
+
+export interface CircleDetail extends Circle {
+  members?: CircleMember[];
+  tools?: CircleTool[];
+}
+
+export interface CreateCircleRequest {
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+}
+
+export interface JoinCircleRequest {
+  inviteCode: string;
+}
+
+export interface UpdateMemberRoleRequest {
+  role: 'member' | 'admin';
+}
+
+export interface InviteResponse {
+  inviteCode: string;
+  inviteUrl: string;
+}
+
+// ============================================================================
+// Circles API
+// ============================================================================
+
+export const circlesApi = {
+  /**
+   * Get all circles the current user is a member of
+   */
+  async list(): Promise<Circle[]> {
+    return apiRequest<Circle[]>('/api/circles');
+  },
+
+  /**
+   * Get circle details including members and tools
+   */
+  async get(id: string): Promise<CircleDetail> {
+    return apiRequest<CircleDetail>(`/api/circles/${id}`);
+  },
+
+  /**
+   * Create a new circle
+   */
+  async create(data: CreateCircleRequest): Promise<Circle> {
+    return apiRequest<Circle>('/api/circles', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  /**
+   * Join a circle using an invite code
+   */
+  async join(inviteCode: string): Promise<Circle> {
+    return apiRequest<Circle>('/api/circles/join', {
+      method: 'POST',
+      body: { inviteCode },
+    });
+  },
+
+  /**
+   * Join a specific circle using an invite code
+   */
+  async joinById(id: string, inviteCode: string): Promise<Circle> {
+    return apiRequest<Circle>(`/api/circles/${id}/join`, {
+      method: 'POST',
+      body: { inviteCode },
+    });
+  },
+
+  /**
+   * Get invite code and URL for a circle (admin only)
+   */
+  async getInvite(id: string): Promise<InviteResponse> {
+    return apiRequest<InviteResponse>(`/api/circles/${id}/invite`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Remove a member from a circle (admin only)
+   */
+  async removeMember(circleId: string, userId: string): Promise<void> {
+    return apiRequest<void>(`/api/circles/${circleId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Update a member's role (admin only)
+   */
+  async updateMemberRole(
+    circleId: string,
+    userId: string,
+    role: 'member' | 'admin'
+  ): Promise<CircleMember> {
+    return apiRequest<CircleMember>(`/api/circles/${circleId}/members/${userId}`, {
+      method: 'PUT',
+      body: { role },
+    });
+  },
+
+  /**
+   * Leave a circle
+   */
+  async leave(circleId: string): Promise<void> {
+    return apiRequest<void>(`/api/circles/${circleId}/members/me`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 export { ApiError };
-export default { toolsApi, reservationApi, userApi };
+export default { toolsApi, reservationApi, userApi, circlesApi, notificationApi, reviewsApi };

@@ -80,16 +80,19 @@ export default function Profile() {
   });
 
   // Update form values when user profile loads
+  // Use resetForm to set both values and initialValues, keeping form "clean" until user edits
   useEffect(() => {
     if (userProfile) {
-      formik.setValues({
-        displayName: userProfile.displayName || user?.name || '',
-        phone: userProfile.phone || '',
-        streetAddress: userProfile.streetAddress || '',
-        city: userProfile.city || '',
-        state: userProfile.state || '',
-        zipCode: userProfile.zipCode || '',
-        bio: userProfile.bio || '',
+      formik.resetForm({
+        values: {
+          displayName: userProfile.displayName || user?.name || '',
+          phone: userProfile.phone || '',
+          streetAddress: userProfile.streetAddress || '',
+          city: userProfile.city || '',
+          state: userProfile.state || '',
+          zipCode: userProfile.zipCode || '',
+          bio: userProfile.bio || '',
+        },
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

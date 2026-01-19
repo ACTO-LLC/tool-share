@@ -195,10 +195,10 @@ export class ToolsController extends Controller {
   public async browseTools(
     @Request() request: ExpressRequest,
     @Query() category?: string,
-    @Query() circleId?: string,
+    @Query() _circleId?: string,
     @Query() ownerId?: string,
-    @Query() availableFrom?: string,
-    @Query() availableTo?: string,
+    @Query() _availableFrom?: string,
+    @Query() _availableTo?: string,
     @Query() sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc',
     @Query() page?: number,
     @Query() pageSize?: number

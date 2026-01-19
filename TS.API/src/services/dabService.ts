@@ -66,6 +66,7 @@ interface User {
   zipCode?: string;
   reputationScore: number;
   notifyEmail?: boolean;
+  stripeCustomerId?: string;
   subscriptionStatus?: string;
   subscriptionEndsAt?: string;
   tosAcceptedAt?: string;
@@ -131,6 +132,7 @@ export async function getUserByExternalId(externalId: string, authToken?: string
           zipCode
           reputationScore
           notifyEmail
+          stripeCustomerId
           subscriptionStatus
           subscriptionEndsAt
           tosAcceptedAt
@@ -170,6 +172,7 @@ export async function getUserById(id: string, authToken?: string): Promise<User 
         zipCode
         reputationScore
         notifyEmail
+        stripeCustomerId
         subscriptionStatus
         subscriptionEndsAt
         tosAcceptedAt
@@ -1203,5 +1206,315 @@ export async function getDashboardStats(userId: string, authToken?: string): Pro
     toolsListed: toolsResult.tools.items.length,
     activeLoans,
     pendingRequests,
+  };
+}
+
+// ============================================================================
+// Subscription operations
+// ============================================================================
+
+/**
+ * Update user subscription status
+ */
+export async function updateUserSubscription(
+  id: string,
+  data: {
+    subscriptionStatus?: string;
+    subscriptionEndsAt?: string;
+    stripeCustomerId?: string;
+  },
+  authToken?: string
+): Promise<User> {
+  const query = `
+    mutation UpdateUserSubscription($id: ID!, $item: UpdateUserInput!) {
+      updateUser(id: $id, item: $item) {
+        id
+        externalId
+        displayName
+        email
+        subscriptionStatus
+        subscriptionEndsAt
+        stripeCustomerId
+        updatedAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ updateUser: User }>(
+    query,
+    {
+      id,
+      item: {
+        ...data,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+    authToken
+  );
+
+  return result.updateUser;
+}
+
+// ============================================================================
+// User Profile and History operations
+// ============================================================================
+
+/**
+ * Get public user profile by ID
+ * Returns limited fields suitable for public viewing
+ */
+export async function getPublicUserProfile(userId: string, authToken?: string): Promise<{
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  bio?: string;
+  city?: string;
+  state?: string;
+  reputationScore: number;
+  createdAt: string;
+} | null> {
+  const query = `
+    query GetPublicUser($id: ID!) {
+      user_by_pk(id: $id) {
+        id
+        displayName
+        avatarUrl
+        bio
+        city
+        state
+        reputationScore
+        createdAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ user_by_pk: User | null }>(
+    query,
+    { id: userId },
+    authToken
+  );
+
+  if (!result.user_by_pk) return null;
+
+  return {
+    id: result.user_by_pk.id,
+    displayName: result.user_by_pk.displayName,
+    avatarUrl: result.user_by_pk.avatarUrl,
+    bio: result.user_by_pk.bio,
+    city: result.user_by_pk.city,
+    state: result.user_by_pk.state,
+    reputationScore: result.user_by_pk.reputationScore,
+    createdAt: result.user_by_pk.createdAt,
+  };
+}
+
+/**
+ * Get user's lending history (tools they loaned out)
+ */
+export async function getUserLendingHistory(
+  userId: string,
+  authToken?: string
+): Promise<Array<{
+  id: string;
+  toolId: string;
+  toolName: string;
+  borrowerName: string;
+  borrowerAvatarUrl?: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  completedAt?: string;
+}>> {
+  const query = `
+    query GetLendingHistory($filter: ToolFilterInput) {
+      tools(filter: $filter) {
+        items {
+          id
+          name
+          reservations(orderBy: { startDate: DESC }) {
+            items {
+              id
+              status
+              startDate
+              endDate
+              returnConfirmedAt
+              borrower {
+                id
+                displayName
+                avatarUrl
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{
+    tools: {
+      items: Array<{
+        id: string;
+        name: string;
+        reservations: {
+          items: Array<{
+            id: string;
+            status: string;
+            startDate: string;
+            endDate: string;
+            returnConfirmedAt?: string;
+            borrower: {
+              id: string;
+              displayName: string;
+              avatarUrl?: string;
+            };
+          }>;
+        };
+      }>;
+    };
+  }>(
+    query,
+    { filter: { ownerId: { eq: userId } } },
+    authToken
+  );
+
+  // Flatten the results
+  const history: Array<{
+    id: string;
+    toolId: string;
+    toolName: string;
+    borrowerName: string;
+    borrowerAvatarUrl?: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    completedAt?: string;
+  }> = [];
+
+  for (const tool of result.tools.items) {
+    for (const reservation of tool.reservations?.items || []) {
+      // Only include completed, active, or confirmed reservations
+      if (['completed', 'active', 'confirmed'].includes(reservation.status)) {
+        history.push({
+          id: reservation.id,
+          toolId: tool.id,
+          toolName: tool.name,
+          borrowerName: reservation.borrower.displayName,
+          borrowerAvatarUrl: reservation.borrower.avatarUrl,
+          status: reservation.status,
+          startDate: reservation.startDate,
+          endDate: reservation.endDate,
+          completedAt: reservation.returnConfirmedAt,
+        });
+      }
+    }
+  }
+
+  // Sort by start date descending
+  return history.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+}
+
+/**
+ * Get user's borrowing history (tools they borrowed)
+ */
+export async function getUserBorrowingHistory(
+  userId: string,
+  authToken?: string
+): Promise<Array<{
+  id: string;
+  toolId: string;
+  toolName: string;
+  ownerName: string;
+  ownerAvatarUrl?: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  completedAt?: string;
+}>> {
+  const query = `
+    query GetBorrowingHistory($filter: ReservationFilterInput) {
+      reservations(filter: $filter, orderBy: { startDate: DESC }) {
+        items {
+          id
+          toolId
+          status
+          startDate
+          endDate
+          returnConfirmedAt
+          tool {
+            id
+            name
+            owner {
+              id
+              displayName
+              avatarUrl
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{
+    reservations: {
+      items: Array<{
+        id: string;
+        toolId: string;
+        status: string;
+        startDate: string;
+        endDate: string;
+        returnConfirmedAt?: string;
+        tool: {
+          id: string;
+          name: string;
+          owner: {
+            id: string;
+            displayName: string;
+            avatarUrl?: string;
+          };
+        };
+      }>;
+    };
+  }>(
+    query,
+    { filter: { borrowerId: { eq: userId } } },
+    authToken
+  );
+
+  // Only include completed, active, or confirmed reservations
+  return result.reservations.items
+    .filter(r => ['completed', 'active', 'confirmed'].includes(r.status))
+    .map(r => ({
+      id: r.id,
+      toolId: r.toolId,
+      toolName: r.tool.name,
+      ownerName: r.tool.owner.displayName,
+      ownerAvatarUrl: r.tool.owner.avatarUrl,
+      status: r.status,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      completedAt: r.returnConfirmedAt,
+    }));
+}
+
+/**
+ * Get user history statistics
+ */
+export async function getUserHistoryStats(
+  userId: string,
+  authToken?: string
+): Promise<{
+  totalLends: number;
+  totalBorrows: number;
+  activeLends: number;
+  activeBorrows: number;
+}> {
+  const lendingHistory = await getUserLendingHistory(userId, authToken);
+  const borrowingHistory = await getUserBorrowingHistory(userId, authToken);
+
+  return {
+    totalLends: lendingHistory.filter(h => h.status === 'completed').length,
+    totalBorrows: borrowingHistory.filter(h => h.status === 'completed').length,
+    activeLends: lendingHistory.filter(h => h.status === 'active').length,
+    activeBorrows: borrowingHistory.filter(h => h.status === 'active').length,
   };
 }

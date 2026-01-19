@@ -7,6 +7,7 @@ import swaggerUi from 'swagger-ui-express';
 import { RegisterRoutes } from './generated/routes';
 import { ValidateError } from 'tsoa';
 import { config } from './config/env';
+import { handleStripeWebhook } from './routes/subscriptionsController';
 
 // Configure multer for file uploads (memory storage for blob upload)
 const upload = multer({
@@ -35,6 +36,15 @@ app.use(cors({
   origin: config.CORS_ORIGIN,
   credentials: true,
 }));
+
+// Stripe webhook needs raw body for signature verification
+// Must be registered BEFORE express.json() middleware
+app.post(
+  '/api/webhooks/stripe',
+  express.raw({ type: 'application/json' }),
+  handleStripeWebhook
+);
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined'));

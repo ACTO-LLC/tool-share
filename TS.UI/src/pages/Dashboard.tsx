@@ -15,6 +15,8 @@ import {
   Divider,
   Skeleton,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -40,6 +42,8 @@ const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
@@ -147,14 +151,14 @@ export default function Dashboard() {
     return (
       <Box>
         <Skeleton variant="text" width={300} height={48} sx={{ mb: 3 }} />
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mb: 4 }}>
           {[1, 2, 3].map((i) => (
-            <Grid item xs={12} sm={4} key={i}>
-              <Skeleton variant="rectangular" height={150} />
+            <Grid item xs={4} sm={4} key={i}>
+              <Skeleton variant="rectangular" height={isMobile ? 100 : 150} />
             </Grid>
           ))}
         </Grid>
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 2, sm: 3 }}>
           <Grid item xs={12} md={6}>
             <Skeleton variant="rectangular" height={200} />
           </Grid>
@@ -172,7 +176,7 @@ export default function Dashboard() {
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
-        <Button variant="contained" onClick={() => window.location.reload()}>
+        <Button variant="contained" onClick={() => window.location.reload()} sx={{ minHeight: 48 }}>
           Retry
         </Button>
       </Box>
@@ -184,69 +188,98 @@ export default function Dashboard() {
       <Box
         sx={{
           display: 'flex',
+          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: { xs: 'flex-start', sm: 'center' },
           mb: 3,
+          gap: 1,
         }}
       >
-        <Typography variant="h4">
+        <Typography variant="h4" sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}>
           Welcome back, {mockCurrentUser.displayName.split(' ')[0]}!
         </Typography>
       </Box>
 
       {/* Stats Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={4}>
-          <Card
-            sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 } }}
-            onClick={() => navigate('/my-tools')}
-          >
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Build sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
-              <Typography variant="h3">{stats.toolsListed}</Typography>
-              <Typography color="text.secondary">Tools Listed</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <Card
-            sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 } }}
-            onClick={() => navigate('/reservations')}
-          >
-            <CardContent sx={{ textAlign: 'center' }}>
-              <CalendarMonth
-                sx={{ fontSize: 48, color: 'success.main', mb: 1 }}
-              />
-              <Typography variant="h3">{stats.activeLoans}</Typography>
-              <Typography color="text.secondary">Active Loans</Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} sm={4}>
+      <Grid container spacing={{ xs: 1.5, sm: 3 }} sx={{ mb: 4 }}>
+        <Grid item xs={4}>
           <Card
             sx={{
               cursor: 'pointer',
               '&:hover': { boxShadow: 4 },
-              bgcolor:
-                stats.pendingRequests > 0 ? 'warning.light' : 'background.paper',
+              '&:active': { transform: 'scale(0.98)' },
+              transition: 'transform 0.1s',
+              height: '100%',
+            }}
+            onClick={() => navigate('/my-tools')}
+          >
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+              <Build sx={{ fontSize: { xs: 32, sm: 48 }, color: 'primary.main', mb: { xs: 0.5, sm: 1 } }} />
+              <Typography variant="h3" sx={{ fontSize: { xs: '1.5rem', sm: '3rem' } }}>
+                {stats.toolsListed}
+              </Typography>
+              <Typography color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                {isMobile ? 'Tools' : 'Tools Listed'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={4}>
+          <Card
+            sx={{
+              cursor: 'pointer',
+              '&:hover': { boxShadow: 4 },
+              '&:active': { transform: 'scale(0.98)' },
+              transition: 'transform 0.1s',
+              height: '100%',
             }}
             onClick={() => navigate('/reservations')}
           >
-            <CardContent sx={{ textAlign: 'center' }}>
-              <Pending sx={{ fontSize: 48, color: 'warning.main', mb: 1 }} />
-              <Typography variant="h3">{stats.pendingRequests}</Typography>
-              <Typography color="text.secondary">Pending Requests</Typography>
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+              <CalendarMonth
+                sx={{ fontSize: { xs: 32, sm: 48 }, color: 'success.main', mb: { xs: 0.5, sm: 1 } }}
+              />
+              <Typography variant="h3" sx={{ fontSize: { xs: '1.5rem', sm: '3rem' } }}>
+                {stats.activeLoans}
+              </Typography>
+              <Typography color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                {isMobile ? 'Active' : 'Active Loans'}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid item xs={4}>
+          <Card
+            sx={{
+              cursor: 'pointer',
+              '&:hover': { boxShadow: 4 },
+              '&:active': { transform: 'scale(0.98)' },
+              transition: 'transform 0.1s',
+              bgcolor:
+                stats.pendingRequests > 0 ? 'warning.light' : 'background.paper',
+              height: '100%',
+            }}
+            onClick={() => navigate('/reservations')}
+          >
+            <CardContent sx={{ textAlign: 'center', p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+              <Pending sx={{ fontSize: { xs: 32, sm: 48 }, color: 'warning.main', mb: { xs: 0.5, sm: 1 } }} />
+              <Typography variant="h3" sx={{ fontSize: { xs: '1.5rem', sm: '3rem' } }}>
+                {stats.pendingRequests}
+              </Typography>
+              <Typography color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '1rem' } }}>
+                Pending
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, sm: 3 }}>
         {/* Quick Actions */}
         <Grid item xs={12} md={6}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: { xs: 2, sm: 2 } }}>
+              <Typography variant="h6" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 Quick Actions
               </Typography>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -254,6 +287,7 @@ export default function Dashboard() {
                   variant="contained"
                   startIcon={<Add />}
                   onClick={() => navigate('/my-tools/add')}
+                  sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}
                 >
                   Add Tool
                 </Button>
@@ -261,8 +295,9 @@ export default function Dashboard() {
                   variant="outlined"
                   startIcon={<Search />}
                   onClick={() => navigate('/browse')}
+                  sx={{ minHeight: 48, flex: { xs: 1, sm: 'none' } }}
                 >
-                  Browse Tools
+                  Browse
                 </Button>
               </Box>
             </CardContent>
@@ -273,8 +308,8 @@ export default function Dashboard() {
         {pendingRequests.length > 0 && (
           <Grid item xs={12} md={6}>
             <Card sx={{ bgcolor: 'warning.light' }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
+              <CardContent sx={{ p: { xs: 2, sm: 2 } }}>
+                <Typography variant="h6" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                   Pending Requests
                 </Typography>
                 <List disablePadding>
@@ -282,21 +317,41 @@ export default function Dashboard() {
                     <Box key={reservation.id}>
                       {index > 0 && <Divider />}
                       <ListItem
-                        sx={{ px: 0, cursor: 'pointer' }}
+                        sx={{
+                          px: 0,
+                          py: 1,
+                          cursor: 'pointer',
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          alignItems: { xs: 'flex-start', sm: 'center' },
+                          gap: { xs: 1, sm: 0 },
+                        }}
                         onClick={() =>
                           navigate(`/reservations/${reservation.id}`)
                         }
                       >
-                        <ListItemAvatar>
-                          <Avatar sx={{ bgcolor: 'warning.main' }}>
+                        <ListItemAvatar sx={{ minWidth: { xs: 'auto', sm: 56 } }}>
+                          <Avatar sx={{ bgcolor: 'warning.main', width: { xs: 40, sm: 40 }, height: { xs: 40, sm: 40 } }}>
                             <Handyman />
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={reservation.tool?.name}
-                          secondary={`${reservation.borrower?.displayName} - ${format(parseISO(reservation.startDate), 'MMM d')} to ${format(parseISO(reservation.endDate), 'MMM d')}`}
+                          primary={
+                            <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                              {reservation.tool?.name}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                              {reservation.borrower?.displayName} - {format(parseISO(reservation.startDate), 'MMM d')} to {format(parseISO(reservation.endDate), 'MMM d')}
+                            </Typography>
+                          }
+                          sx={{ my: 0 }}
                         />
-                        <Button size="small" variant="contained">
+                        <Button
+                          size="small"
+                          variant="contained"
+                          sx={{ minHeight: { xs: 36, sm: 32 }, minWidth: { xs: '100%', sm: 'auto' }, mt: { xs: 1, sm: 0 } }}
+                        >
                           Review
                         </Button>
                       </ListItem>
@@ -311,8 +366,8 @@ export default function Dashboard() {
         {/* Upcoming Reservations */}
         <Grid item xs={12} md={pendingRequests.length > 0 ? 12 : 6}>
           <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
+            <CardContent sx={{ p: { xs: 2, sm: 2 } }}>
+              <Typography variant="h6" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 Upcoming Reservations
               </Typography>
               {upcomingReservations.length === 0 ? (
@@ -324,6 +379,7 @@ export default function Dashboard() {
                     variant="outlined"
                     startIcon={<Search />}
                     onClick={() => navigate('/browse')}
+                    sx={{ minHeight: 48 }}
                   >
                     Find Tools to Borrow
                   </Button>
@@ -334,27 +390,45 @@ export default function Dashboard() {
                     <Box key={reservation.id}>
                       {index > 0 && <Divider />}
                       <ListItem
-                        sx={{ px: 0, cursor: 'pointer' }}
+                        sx={{
+                          px: 0,
+                          py: 1,
+                          cursor: 'pointer',
+                          flexDirection: { xs: 'column', sm: 'row' },
+                          alignItems: { xs: 'flex-start', sm: 'center' },
+                          gap: { xs: 1, sm: 0 },
+                        }}
                         onClick={() =>
                           navigate(`/reservations/${reservation.id}`)
                         }
                       >
-                        <ListItemAvatar>
+                        <ListItemAvatar sx={{ minWidth: { xs: 'auto', sm: 56 } }}>
                           <Avatar
                             src={reservation.tool?.photos?.[0]?.url}
                             variant="rounded"
+                            sx={{ width: { xs: 48, sm: 40 }, height: { xs: 48, sm: 40 } }}
                           >
                             <Handyman />
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={reservation.tool?.name}
-                          secondary={`${format(parseISO(reservation.startDate), 'MMM d')} - ${format(parseISO(reservation.endDate), 'MMM d, yyyy')}`}
+                          primary={
+                            <Typography variant="body1" sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
+                              {reservation.tool?.name}
+                            </Typography>
+                          }
+                          secondary={
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                              {format(parseISO(reservation.startDate), 'MMM d')} - {format(parseISO(reservation.endDate), 'MMM d, yyyy')}
+                            </Typography>
+                          }
+                          sx={{ my: 0 }}
                         />
                         <Chip
                           label={reservation.status}
                           size="small"
                           color={getStatusColor(reservation.status)}
+                          sx={{ minHeight: { xs: 28, sm: 24 } }}
                         />
                       </ListItem>
                     </Box>
@@ -368,7 +442,7 @@ export default function Dashboard() {
         {/* My Tools Quick View */}
         <Grid item xs={12}>
           <Card>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 2, sm: 2 } }}>
               <Box
                 sx={{
                   display: 'flex',
@@ -377,8 +451,10 @@ export default function Dashboard() {
                   mb: 2,
                 }}
               >
-                <Typography variant="h6">My Tools</Typography>
-                <Button size="small" onClick={() => navigate('/my-tools')}>
+                <Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  My Tools
+                </Typography>
+                <Button size="small" onClick={() => navigate('/my-tools')} sx={{ minHeight: { xs: 36, sm: 32 } }}>
                   View All
                 </Button>
               </Box>
@@ -391,22 +467,28 @@ export default function Dashboard() {
                     variant="contained"
                     startIcon={<Add />}
                     onClick={() => navigate('/my-tools/add')}
+                    sx={{ minHeight: 48 }}
                   >
                     Add Your First Tool
                   </Button>
                 </Box>
               ) : (
-                <Grid container spacing={2}>
-                  {myTools.slice(0, 4).map((tool) => (
+                <Grid container spacing={{ xs: 1, sm: 2 }}>
+                  {myTools.slice(0, isMobile ? 2 : 4).map((tool) => (
                     <Grid item xs={6} sm={3} key={tool.id}>
                       <Card
                         variant="outlined"
-                        sx={{ cursor: 'pointer', '&:hover': { boxShadow: 2 } }}
+                        sx={{
+                          cursor: 'pointer',
+                          '&:hover': { boxShadow: 2 },
+                          '&:active': { transform: 'scale(0.98)' },
+                          transition: 'transform 0.1s',
+                        }}
                         onClick={() => navigate(`/tools/${tool.id}`)}
                       >
                         <Box
                           sx={{
-                            height: 100,
+                            height: { xs: 80, sm: 100 },
                             bgcolor: 'grey.200',
                             backgroundImage: tool.photos?.[0]?.url
                               ? `url(${tool.photos[0].url})`
@@ -419,11 +501,11 @@ export default function Dashboard() {
                           }}
                         >
                           {!tool.photos?.[0]?.url && (
-                            <Handyman sx={{ fontSize: 40, color: 'grey.400' }} />
+                            <Handyman sx={{ fontSize: { xs: 32, sm: 40 }, color: 'grey.400' }} />
                           )}
                         </Box>
-                        <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                          <Typography variant="body2" noWrap>
+                        <CardContent sx={{ p: { xs: 1, sm: 1.5 }, '&:last-child': { pb: { xs: 1, sm: 1.5 } } }}>
+                          <Typography variant="body2" noWrap sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                             {tool.name}
                           </Typography>
                           <Chip
@@ -432,7 +514,7 @@ export default function Dashboard() {
                             color={
                               tool.status === 'available' ? 'success' : 'default'
                             }
-                            sx={{ mt: 0.5 }}
+                            sx={{ mt: 0.5, height: { xs: 20, sm: 24 }, fontSize: { xs: '0.65rem', sm: '0.75rem' } }}
                           />
                         </CardContent>
                       </Card>

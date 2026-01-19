@@ -13,8 +13,11 @@ import { setMsalInstance } from './services/api';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh for this long
+      gcTime: 30 * 60 * 1000, // 30 minutes - cache data kept for this long (formerly cacheTime)
       retry: 1,
+      refetchOnWindowFocus: false, // Reduce unnecessary refetches
+      refetchOnReconnect: true, // Refetch when connection restored
     },
   },
 });

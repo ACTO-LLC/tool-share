@@ -580,6 +580,10 @@ export const toolsApi = {
     q?: string;
     category?: string;
     circleId?: string;
+    ownerId?: string;
+    availableFrom?: string;
+    availableTo?: string;
+    sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc';
     page?: number;
     pageSize?: number;
   }): Promise<ToolListResponse> {
@@ -587,6 +591,10 @@ export const toolsApi = {
     if (params?.q) queryParams.append('q', params.q);
     if (params?.category) queryParams.append('category', params.category);
     if (params?.circleId) queryParams.append('circleId', params.circleId);
+    if (params?.ownerId) queryParams.append('ownerId', params.ownerId);
+    if (params?.availableFrom) queryParams.append('availableFrom', params.availableFrom);
+    if (params?.availableTo) queryParams.append('availableTo', params.availableTo);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
 
@@ -599,11 +607,21 @@ export const toolsApi = {
    */
   async browse(params?: {
     category?: string;
+    circleId?: string;
+    ownerId?: string;
+    availableFrom?: string;
+    availableTo?: string;
+    sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc';
     page?: number;
     pageSize?: number;
   }): Promise<ToolListResponse> {
     const queryParams = new URLSearchParams();
     if (params?.category) queryParams.append('category', params.category);
+    if (params?.circleId) queryParams.append('circleId', params.circleId);
+    if (params?.ownerId) queryParams.append('ownerId', params.ownerId);
+    if (params?.availableFrom) queryParams.append('availableFrom', params.availableFrom);
+    if (params?.availableTo) queryParams.append('availableTo', params.availableTo);
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
 
@@ -905,5 +923,142 @@ export const circlesApi = {
   },
 };
 
+// ============================================================================
+// Subscription Types
+// ============================================================================
+
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'none';
+
+export interface SubscriptionStatusResponse {
+  status: SubscriptionStatus;
+  subscriptionEndsAt?: string;
+  isInGracePeriod: boolean;
+  canAccessFeatures: boolean;
+  stripeCustomerId?: string;
+}
+
+export interface CheckoutResponse {
+  checkoutUrl: string;
+}
+
+export interface PortalResponse {
+  portalUrl: string;
+}
+
+// ============================================================================
+// Subscription API
+// ============================================================================
+
+export const subscriptionApi = {
+  /**
+   * Get current subscription status
+   */
+  async getStatus(): Promise<SubscriptionStatusResponse> {
+    return apiRequest<SubscriptionStatusResponse>('/api/subscriptions/status');
+  },
+
+  /**
+   * Create a checkout session to subscribe
+   */
+  async createCheckout(): Promise<CheckoutResponse> {
+    return apiRequest<CheckoutResponse>('/api/subscriptions/checkout', {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Get Stripe Customer Portal URL
+   */
+  async getPortal(): Promise<PortalResponse> {
+    return apiRequest<PortalResponse>('/api/subscriptions/portal');
+  },
+};
+
+// ============================================================================
+// User History Types
+// ============================================================================
+
+export interface LendingHistoryItem {
+  id: string;
+  toolId: string;
+  toolName: string;
+  borrowerName: string;
+  borrowerAvatarUrl?: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  completedAt?: string;
+}
+
+export interface BorrowingHistoryItem {
+  id: string;
+  toolId: string;
+  toolName: string;
+  ownerName: string;
+  ownerAvatarUrl?: string;
+  status: string;
+  startDate: string;
+  endDate: string;
+  completedAt?: string;
+}
+
+export interface UserHistoryStats {
+  totalLends: number;
+  totalBorrows: number;
+  activeLends: number;
+  activeBorrows: number;
+}
+
+export interface UserHistoryResponse {
+  lending: LendingHistoryItem[];
+  borrowing: BorrowingHistoryItem[];
+  stats: UserHistoryStats;
+}
+
+export interface PublicProfileResponse {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  bio?: string;
+  city?: string;
+  state?: string;
+  reputationScore: number;
+  memberSince: string;
+}
+
+// ============================================================================
+// Extended User API
+// ============================================================================
+
+export const userProfileApi = {
+  /**
+   * Get public profile for a user
+   */
+  async getPublicProfile(userId: string): Promise<PublicProfileResponse> {
+    return apiRequest<PublicProfileResponse>(`/api/users/${userId}`);
+  },
+
+  /**
+   * Get current user's history
+   */
+  async getMyHistory(): Promise<UserHistoryResponse> {
+    return apiRequest<UserHistoryResponse>('/api/users/me/history');
+  },
+
+  /**
+   * Get a user's public history
+   */
+  async getUserHistory(userId: string): Promise<UserHistoryResponse> {
+    return apiRequest<UserHistoryResponse>(`/api/users/${userId}/history`);
+  },
+
+  /**
+   * Get current user's reviews
+   */
+  async getMyReviews(): Promise<UserReviewsResponse> {
+    return apiRequest<UserReviewsResponse>('/api/users/me/reviews');
+  },
+};
+
 export { ApiError };
-export default { toolsApi, reservationApi, userApi, circlesApi, notificationApi, reviewsApi };
+export default { toolsApi, reservationApi, userApi, circlesApi, notificationApi, reviewsApi, subscriptionApi, userProfileApi };

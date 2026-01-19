@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -12,6 +13,8 @@ import {
   Avatar,
   Chip,
   Divider,
+  Skeleton,
+  Alert,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,34 +32,98 @@ import {
   getReservationsByBorrower,
   getPendingRequestsForOwner,
 } from '../data/mockData';
+import { reservationApi, Reservation, DashboardStats } from '../services/api';
+import { Tool } from '../types';
+
+// Check if we should use real API
+const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStats>({
+    toolsListed: 0,
+    activeLoans: 0,
+    pendingRequests: 0,
+  });
+  const [upcomingReservations, setUpcomingReservations] = useState<Reservation[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<Reservation[]>([]);
+  const [myTools, setMyTools] = useState<Tool[]>([]);
 
-  // Get data for current user
-  const myTools = getToolsByOwner(mockCurrentUser.id);
-  const myBorrowedReservations = getReservationsByBorrower(mockCurrentUser.id);
-  const pendingRequests = getPendingRequestsForOwner(mockCurrentUser.id);
+  useEffect(() => {
+    async function loadDashboardData() {
+      setLoading(true);
+      setError(null);
 
-  // Filter upcoming reservations (where I'm borrowing)
-  const upcomingReservations = myBorrowedReservations
-    .filter(
-      (r) =>
-        ['confirmed', 'pending'].includes(r.status) &&
-        isAfter(parseISO(r.startDate), new Date())
-    )
-    .slice(0, 3);
+      try {
+        if (USE_REAL_API) {
+          // Fetch from real API
+          const [statsData, reservationsData] = await Promise.all([
+            reservationApi.getDashboardStats(),
+            reservationApi.list({ role: 'all' }),
+          ]);
 
-  // Active loans (tools I'm currently borrowing)
-  const activeLoans = myBorrowedReservations.filter(
-    (r) => r.status === 'active'
-  ).length;
+          setStats(statsData);
 
-  const stats = {
-    toolsListed: myTools.length,
-    activeLoans: activeLoans,
-    pendingRequests: pendingRequests.length,
-  };
+          // Filter upcoming reservations (where user is borrowing)
+          const now = new Date();
+          const upcoming = reservationsData.items
+            .filter(
+              (r) =>
+                ['confirmed', 'pending'].includes(r.status) &&
+                isAfter(parseISO(r.startDate), now)
+            )
+            .slice(0, 3);
+          setUpcomingReservations(upcoming);
+
+          // Filter pending requests (for user's tools)
+          const pending = reservationsData.items
+            .filter((r) => r.status === 'pending')
+            .slice(0, 3);
+          setPendingRequests(pending);
+
+          // TODO: Fetch tools from real API when available
+          setMyTools([]);
+        } else {
+          // Use mock data
+          const mockTools = getToolsByOwner(mockCurrentUser.id);
+          const mockBorrowedReservations = getReservationsByBorrower(mockCurrentUser.id);
+          const mockPendingRequests = getPendingRequestsForOwner(mockCurrentUser.id);
+
+          // Filter upcoming reservations (where user is borrowing)
+          const upcoming = mockBorrowedReservations
+            .filter(
+              (r) =>
+                ['confirmed', 'pending'].includes(r.status) &&
+                isAfter(parseISO(r.startDate), new Date())
+            )
+            .slice(0, 3);
+
+          // Active loans (tools currently borrowed)
+          const activeLoans = mockBorrowedReservations.filter(
+            (r) => r.status === 'active'
+          ).length;
+
+          setStats({
+            toolsListed: mockTools.length,
+            activeLoans: activeLoans,
+            pendingRequests: mockPendingRequests.length,
+          });
+          setUpcomingReservations(upcoming);
+          setPendingRequests(mockPendingRequests);
+          setMyTools(mockTools);
+        }
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+        setError('Failed to load dashboard data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadDashboardData();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -75,6 +142,42 @@ export default function Dashboard() {
         return 'default';
     }
   };
+
+  if (loading) {
+    return (
+      <Box>
+        <Skeleton variant="text" width={300} height={48} sx={{ mb: 3 }} />
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          {[1, 2, 3].map((i) => (
+            <Grid item xs={12} sm={4} key={i}>
+              <Skeleton variant="rectangular" height={150} />
+            </Grid>
+          ))}
+        </Grid>
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <Skeleton variant="rectangular" height={200} />
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Skeleton variant="rectangular" height={200} />
+          </Grid>
+        </Grid>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button variant="contained" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box>

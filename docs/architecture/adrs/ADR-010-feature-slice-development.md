@@ -136,6 +136,69 @@ Milestones track phases:
 - Phase 2: Core Features
 - Phase 3: Polish
 
+## Git Branching Strategy
+
+**CRITICAL: Each agent/developer MUST work on their own feature branch.**
+
+### Branch Naming Convention
+```
+feature/slice-1-auth
+feature/slice-2-tools
+feature/slice-3-reservations
+```
+
+### Workflow for Parallel Agents
+
+```bash
+# BEFORE launching agents, create branches from master:
+git checkout master
+git pull origin master
+git checkout -b feature/slice-1-auth
+git push -u origin feature/slice-1-auth
+git checkout master
+git checkout -b feature/slice-2-tools
+git push -u origin feature/slice-2-tools
+git checkout master
+git checkout -b feature/slice-3-reservations
+git push -u origin feature/slice-3-reservations
+```
+
+### Agent Launch Instructions
+
+Each agent prompt MUST include:
+```
+IMPORTANT: Before making any changes:
+1. Run: git checkout feature/slice-X-name
+2. Verify you are on the correct branch: git branch --show-current
+3. All commits go to YOUR branch only
+4. When done, push: git push origin feature/slice-X-name
+```
+
+### Integration Process
+
+After all agents complete their slice work:
+
+1. **Create PRs** - Each slice branch creates a PR to master
+2. **Review** - Review each PR for conflicts with other slices
+3. **Merge order** - Merge in dependency order:
+   - Slice 1 (Auth) first - provides auth middleware
+   - Slice 2 (Tools) second
+   - Slice 3 (Reservations) third
+4. **Resolve conflicts** - If conflicts arise, resolve in the later PR
+
+### Why This Matters
+
+- **Prevents merge conflicts** during parallel development
+- **Enables code review** before integration
+- **Allows rollback** of individual slices if needed
+- **Creates audit trail** of who changed what
+
+### Lesson Learned
+
+> If agents work on the same branch simultaneously, they will overwrite each other's
+> changes and create untraceable merge conflicts. Always isolate agent work to
+> separate branches.
+
 ## Related
 
 - [GitHub Issues](https://github.com/ACTO-LLC/tool-share/issues)

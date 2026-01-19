@@ -17,6 +17,9 @@ import {
   Rating,
   ToggleButtonGroup,
   ToggleButton,
+  CircularProgress,
+  Alert,
+  Pagination,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -26,38 +29,95 @@ import {
   Handyman,
   LocationOn,
 } from '@mui/icons-material';
-import { getAvailableTools, mockCurrentUser } from '../data/mockData';
+import { useQuery } from '@tanstack/react-query';
+import { toolsApi, Tool as ApiTool } from '../services/api';
 import { TOOL_CATEGORIES } from '../types';
+
+// Use mock data as fallback when API is unavailable
+import { getAvailableTools, mockCurrentUser } from '../data/mockData';
+import { Tool as MockTool } from '../types';
+
+// Flag to enable/disable mock data fallback
+const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 export default function BrowseTools() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
-  const availableTools = getAvailableTools();
+  // Fetch tools from API
+  const {
+    data: apiResponse,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['tools', 'browse', categoryFilter, searchQuery, page],
+    queryFn: async () => {
+      // If search query is provided, use search endpoint
+      if (searchQuery) {
+        return toolsApi.search({
+          q: searchQuery,
+          category: categoryFilter || undefined,
+          page,
+          pageSize,
+        });
+      }
+      // Otherwise use browse endpoint
+      return toolsApi.browse({
+        category: categoryFilter || undefined,
+        page,
+        pageSize,
+      });
+    },
+    staleTime: 30000, // 30 seconds
+    retry: USE_MOCK_FALLBACK ? 1 : 3,
+  });
 
-  // Filter tools based on search and category
-  const filteredTools = useMemo(() => {
-    return availableTools.filter((tool) => {
+  // Handle mock data fallback
+  const mockTools = useMemo(() => {
+    if (!USE_MOCK_FALLBACK) return [];
+    return getAvailableTools().filter((tool: MockTool) => {
       // Don't show user's own tools
       if (tool.ownerId === mockCurrentUser.id) return false;
-
-      // Search filter
-      const matchesSearch =
-        searchQuery === '' ||
-        tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tool.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tool.brand?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tool.model?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Category filter
-      const matchesCategory =
-        categoryFilter === '' || tool.category === categoryFilter;
-
-      return matchesSearch && matchesCategory;
+      return true;
     });
-  }, [availableTools, searchQuery, categoryFilter]);
+  }, []);
+
+  // Determine which data to use
+  const shouldUseMock = USE_MOCK_FALLBACK && (isError || !apiResponse);
+
+  // Normalize tools to common format
+  const tools: ApiTool[] = useMemo(() => {
+    if (shouldUseMock) {
+      // Convert mock tools to API format and apply filters
+      let filtered = mockTools as unknown as ApiTool[];
+
+      // Apply search filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(tool =>
+          tool.name.toLowerCase().includes(query) ||
+          tool.description?.toLowerCase().includes(query) ||
+          tool.brand?.toLowerCase().includes(query) ||
+          tool.model?.toLowerCase().includes(query)
+        );
+      }
+
+      // Apply category filter
+      if (categoryFilter) {
+        filtered = filtered.filter(tool => tool.category === categoryFilter);
+      }
+
+      return filtered;
+    }
+    return apiResponse?.tools || [];
+  }, [shouldUseMock, mockTools, apiResponse, searchQuery, categoryFilter]);
+
+  const total = shouldUseMock ? tools.length : (apiResponse?.total || 0);
+  const totalPages = Math.ceil(total / pageSize);
 
   const handleViewChange = (
     _: React.MouseEvent<HTMLElement>,
@@ -66,6 +126,20 @@ export default function BrowseTools() {
     if (newView !== null) {
       setViewMode(newView);
     }
+  };
+
+  const handlePageChange = (_: React.ChangeEvent<unknown>, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+    setPage(1); // Reset to first page on search
+  };
+
+  const handleCategoryChange = (e: { target: { value: string } }) => {
+    setCategoryFilter(e.target.value);
+    setPage(1); // Reset to first page on filter change
   };
 
   return (
@@ -82,7 +156,7 @@ export default function BrowseTools() {
               fullWidth
               placeholder="Search tools..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -98,7 +172,7 @@ export default function BrowseTools() {
               <Select
                 value={categoryFilter}
                 label="Category"
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={handleCategoryChange}
               >
                 <MenuItem value="">All Categories</MenuItem>
                 {TOOL_CATEGORIES.map((cat) => (
@@ -127,14 +201,36 @@ export default function BrowseTools() {
         </Grid>
       </Box>
 
+      {/* Loading State */}
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Error State */}
+      {isError && !shouldUseMock && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to load tools. Please try again later.
+        </Alert>
+      )}
+
+      {/* Mock Data Warning */}
+      {shouldUseMock && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Showing sample data. Connect to the API for live data.
+        </Alert>
+      )}
+
       {/* Results count */}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {filteredTools.length} tool{filteredTools.length !== 1 ? 's' : ''}{' '}
-        available
-      </Typography>
+      {!isLoading && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {total} tool{total !== 1 ? 's' : ''} available
+        </Typography>
+      )}
 
       {/* Tools Grid/List */}
-      {filteredTools.length === 0 ? (
+      {!isLoading && tools.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <Handyman sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
           <Typography variant="h6" color="text.secondary">
@@ -144,9 +240,9 @@ export default function BrowseTools() {
             Try adjusting your search or filters
           </Typography>
         </Box>
-      ) : viewMode === 'grid' ? (
+      ) : !isLoading && viewMode === 'grid' ? (
         <Grid container spacing={3}>
-          {filteredTools.map((tool) => (
+          {tools.map((tool) => (
             <Grid item xs={12} sm={6} md={4} lg={3} key={tool.id}>
               <Card
                 sx={{
@@ -229,10 +325,10 @@ export default function BrowseTools() {
             </Grid>
           ))}
         </Grid>
-      ) : (
+      ) : !isLoading ? (
         // List View
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {filteredTools.map((tool) => (
+          {tools.map((tool) => (
             <Card
               key={tool.id}
               sx={{ cursor: 'pointer', '&:hover': { boxShadow: 4 } }}
@@ -338,6 +434,18 @@ export default function BrowseTools() {
               </Box>
             </Card>
           ))}
+        </Box>
+      ) : null}
+
+      {/* Pagination */}
+      {!isLoading && totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+          />
         </Box>
       )}
     </Box>

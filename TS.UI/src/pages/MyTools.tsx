@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,20 +30,68 @@ import {
   VisibilityOff,
   Handyman,
 } from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toolsApi, Tool as ApiTool } from '../services/api';
+
+// Mock data for fallback
 import { getToolsByOwner, mockCurrentUser } from '../data/mockData';
-import { Tool } from '../types';
+
+// Flag to enable/disable mock data fallback
+const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 export default function MyTools() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [selectedTool, setSelectedTool] = useState<ApiTool | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const myTools = getToolsByOwner(mockCurrentUser.id);
+  // Fetch tools from API
+  const {
+    data: apiTools,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['tools', 'my'],
+    queryFn: toolsApi.getMyTools,
+    retry: USE_MOCK_FALLBACK ? 1 : 3,
+  });
+
+  // Delete (archive) mutation
+  const deleteMutation = useMutation({
+    mutationFn: toolsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tools'] });
+      setDeleteDialogOpen(false);
+      handleMenuClose();
+    },
+  });
+
+  // Update status mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: 'available' | 'unavailable' }) =>
+      toolsApi.update(id, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tools'] });
+      handleMenuClose();
+    },
+  });
+
+  // Handle mock data fallback
+  const mockTools = useMemo(() => {
+    if (!USE_MOCK_FALLBACK) return [];
+    return getToolsByOwner(mockCurrentUser.id);
+  }, []);
+
+  // Determine which data to use
+  const shouldUseMock = USE_MOCK_FALLBACK && (isError || !apiTools);
+  const myTools: ApiTool[] = shouldUseMock
+    ? (mockTools as unknown as ApiTool[])
+    : (apiTools || []);
 
   const handleMenuOpen = (
     event: React.MouseEvent<HTMLElement>,
-    tool: Tool
+    tool: ApiTool
   ) => {
     event.stopPropagation();
     setAnchorEl(event.currentTarget);
@@ -55,16 +104,29 @@ export default function MyTools() {
   };
 
   const handleToggleAvailability = () => {
-    // In a real app, this would call the API
-    console.log('Toggle availability for:', selectedTool?.id);
-    handleMenuClose();
+    if (!selectedTool) return;
+
+    if (shouldUseMock) {
+      console.log('Toggle availability for:', selectedTool.id);
+      handleMenuClose();
+      return;
+    }
+
+    const newStatus = selectedTool.status === 'available' ? 'unavailable' : 'available';
+    updateMutation.mutate({ id: selectedTool.id, status: newStatus });
   };
 
   const handleDelete = () => {
-    // In a real app, this would call the API
-    console.log('Delete tool:', selectedTool?.id);
-    setDeleteDialogOpen(false);
-    handleMenuClose();
+    if (!selectedTool) return;
+
+    if (shouldUseMock) {
+      console.log('Delete tool:', selectedTool.id);
+      setDeleteDialogOpen(false);
+      handleMenuClose();
+      return;
+    }
+
+    deleteMutation.mutate(selectedTool.id);
   };
 
   const getStatusColor = (status: string) => {
@@ -100,7 +162,28 @@ export default function MyTools() {
         </Button>
       </Box>
 
-      {myTools.length === 0 ? (
+      {/* Loading State */}
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {/* Error State */}
+      {isError && !shouldUseMock && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Failed to load your tools. Please try again later.
+        </Alert>
+      )}
+
+      {/* Mock Data Warning */}
+      {shouldUseMock && !isLoading && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Showing sample data. Connect to the API for live data.
+        </Alert>
+      )}
+
+      {!isLoading && myTools.length === 0 ? (
         <Card>
           <CardContent sx={{ textAlign: 'center', py: 8 }}>
             <Handyman sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
@@ -119,7 +202,7 @@ export default function MyTools() {
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      ) : !isLoading ? (
         <>
           <Alert severity="info" sx={{ mb: 3 }}>
             You have {myTools.length} tool{myTools.length !== 1 ? 's' : ''} listed.
@@ -211,7 +294,7 @@ export default function MyTools() {
             ))}
           </Grid>
         </>
-      )}
+      ) : null}
 
       {/* Tool Menu */}
       <Menu
@@ -233,8 +316,7 @@ export default function MyTools() {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            // In a real app, navigate to edit page
-            console.log('Edit tool:', selectedTool?.id);
+            navigate(`/my-tools/edit/${selectedTool?.id}`);
             handleMenuClose();
           }}
         >
@@ -243,7 +325,10 @@ export default function MyTools() {
           </ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleToggleAvailability}>
+        <MenuItem
+          onClick={handleToggleAvailability}
+          disabled={updateMutation.isPending}
+        >
           <ListItemIcon>
             {selectedTool?.status === 'available' ? (
               <VisibilityOff fontSize="small" />
@@ -275,14 +360,29 @@ export default function MyTools() {
         <DialogTitle>Delete Tool?</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete "{selectedTool?.name}"? This action
-            cannot be undone.
+            Are you sure you want to delete "{selectedTool?.name}"? This will archive
+            the tool and it will no longer appear in search results.
           </Typography>
+          {deleteMutation.isError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              Failed to delete tool. Please try again.
+            </Alert>
+          )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" variant="contained">
-            Delete
+          <Button
+            onClick={() => setDeleteDialogOpen(false)}
+            disabled={deleteMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDelete}
+            color="error"
+            variant="contained"
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

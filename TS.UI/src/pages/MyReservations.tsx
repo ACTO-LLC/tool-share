@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -20,6 +20,9 @@ import {
   DialogActions,
   TextField,
   Alert,
+  Skeleton,
+  CircularProgress,
+  Snackbar,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -29,6 +32,7 @@ import {
   Cancel,
   HourglassEmpty,
   Search,
+  PlayArrow,
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import {
@@ -36,29 +40,68 @@ import {
   getReservationsByBorrower,
   getReservationsForOwner,
 } from '../data/mockData';
-import { Reservation, ReservationStatus } from '../types';
+import {
+  reservationApi,
+  Reservation,
+  ReservationStatus,
+  ApiError,
+} from '../services/api';
+
+// Check if we should use real API
+const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
 
 export default function MyReservations() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
   const [actionDialog, setActionDialog] = useState<{
     open: boolean;
-    action: 'approve' | 'decline' | 'cancel' | null;
+    action: 'approve' | 'decline' | 'cancel' | 'pickup' | 'return' | null;
     reservation: Reservation | null;
   }>({ open: false, action: null, reservation: null });
   const [ownerNote, setOwnerNote] = useState('');
 
-  // Get reservations where I'm the borrower
-  const borrowerReservations = useMemo(
-    () => getReservationsByBorrower(mockCurrentUser.id),
-    []
-  );
+  const [borrowerReservations, setBorrowerReservations] = useState<Reservation[]>([]);
+  const [lenderReservations, setLenderReservations] = useState<Reservation[]>([]);
 
-  // Get reservations for tools I own
-  const lenderReservations = useMemo(
-    () => getReservationsForOwner(mockCurrentUser.id),
-    []
-  );
+  // Load reservations
+  const loadReservations = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (USE_REAL_API) {
+        // Fetch from real API
+        const [borrowerData, lenderData] = await Promise.all([
+          reservationApi.list({ role: 'borrower' }),
+          reservationApi.list({ role: 'lender' }),
+        ]);
+        setBorrowerReservations(borrowerData.items);
+        setLenderReservations(lenderData.items);
+      } else {
+        // Use mock data
+        setBorrowerReservations(getReservationsByBorrower(mockCurrentUser.id));
+        setLenderReservations(getReservationsForOwner(mockCurrentUser.id));
+      }
+    } catch (err) {
+      console.error('Failed to load reservations:', err);
+      setError('Failed to load reservations. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReservations();
+  }, [loadReservations]);
 
   const getStatusColor = (status: ReservationStatus) => {
     switch (status) {
@@ -85,6 +128,8 @@ export default function MyReservations() {
         return <CheckCircle fontSize="small" />;
       case 'pending':
         return <HourglassEmpty fontSize="small" />;
+      case 'active':
+        return <PlayArrow fontSize="small" />;
       case 'cancelled':
       case 'declined':
         return <Cancel fontSize="small" />;
@@ -94,18 +139,90 @@ export default function MyReservations() {
   };
 
   const handleAction = (
-    action: 'approve' | 'decline' | 'cancel',
+    action: 'approve' | 'decline' | 'cancel' | 'pickup' | 'return',
     reservation: Reservation
   ) => {
     setActionDialog({ open: true, action, reservation });
     setOwnerNote('');
   };
 
-  const handleConfirmAction = () => {
-    // In a real app, this would call the API
-    console.log('Action:', actionDialog.action, 'Reservation:', actionDialog.reservation?.id, 'Note:', ownerNote);
-    setActionDialog({ open: false, action: null, reservation: null });
+  const handleConfirmAction = async () => {
+    if (!actionDialog.reservation || !actionDialog.action) return;
+
+    setActionLoading(true);
+    try {
+      const id = actionDialog.reservation.id;
+
+      if (USE_REAL_API) {
+        // Call real API
+        switch (actionDialog.action) {
+          case 'approve':
+            await reservationApi.approve(id, ownerNote || undefined);
+            break;
+          case 'decline':
+            await reservationApi.decline(id, ownerNote || 'No reason provided');
+            break;
+          case 'cancel':
+            await reservationApi.cancel(id, ownerNote || undefined);
+            break;
+          case 'pickup':
+            await reservationApi.pickup(id, ownerNote || undefined);
+            break;
+          case 'return':
+            await reservationApi.return(id, ownerNote || undefined);
+            break;
+        }
+      } else {
+        // Mock: just log the action
+        console.log('Action:', actionDialog.action, 'Reservation:', id, 'Note:', ownerNote);
+      }
+
+      setSnackbar({
+        open: true,
+        message: `Reservation ${actionDialog.action}d successfully!`,
+        severity: 'success',
+      });
+
+      // Reload reservations to get updated data
+      await loadReservations();
+    } catch (err) {
+      console.error('Action failed:', err);
+      const message = err instanceof ApiError ? err.message : 'Action failed. Please try again.';
+      setSnackbar({
+        open: true,
+        message,
+        severity: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+      setActionDialog({ open: false, action: null, reservation: null });
+    }
   };
+
+  // Memoize the reservation grouping
+  const groupedBorrowerReservations = useMemo(() => {
+    return {
+      pending: borrowerReservations.filter((r) => r.status === 'pending'),
+      active: borrowerReservations.filter((r) =>
+        ['confirmed', 'active'].includes(r.status)
+      ),
+      past: borrowerReservations.filter((r) =>
+        ['completed', 'cancelled', 'declined'].includes(r.status)
+      ),
+    };
+  }, [borrowerReservations]);
+
+  const groupedLenderReservations = useMemo(() => {
+    return {
+      pending: lenderReservations.filter((r) => r.status === 'pending'),
+      active: lenderReservations.filter((r) =>
+        ['confirmed', 'active'].includes(r.status)
+      ),
+      past: lenderReservations.filter((r) =>
+        ['completed', 'cancelled', 'declined'].includes(r.status)
+      ),
+    };
+  }, [lenderReservations]);
 
   const renderReservationList = (
     reservations: Reservation[],
@@ -136,14 +253,7 @@ export default function MyReservations() {
       );
     }
 
-    // Group by status
-    const pending = reservations.filter((r) => r.status === 'pending');
-    const active = reservations.filter((r) =>
-      ['confirmed', 'active'].includes(r.status)
-    );
-    const past = reservations.filter((r) =>
-      ['completed', 'cancelled', 'declined'].includes(r.status)
-    );
+    const groups = isLender ? groupedLenderReservations : groupedBorrowerReservations;
 
     const renderGroup = (
       title: string,
@@ -239,7 +349,8 @@ export default function MyReservations() {
                         </>
                       }
                     />
-                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0 }}>
+                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+                      {/* Owner actions */}
                       {isLender && reservation.status === 'pending' && (
                         <>
                           <Button
@@ -260,17 +371,38 @@ export default function MyReservations() {
                           </Button>
                         </>
                       )}
-                      {!isLender &&
-                        ['pending', 'confirmed'].includes(reservation.status) && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            onClick={() => handleAction('cancel', reservation)}
-                          >
-                            Cancel
-                          </Button>
-                        )}
+                      {/* Borrower actions */}
+                      {!isLender && reservation.status === 'confirmed' && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="primary"
+                          onClick={() => handleAction('pickup', reservation)}
+                        >
+                          Confirm Pickup
+                        </Button>
+                      )}
+                      {!isLender && reservation.status === 'active' && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          onClick={() => handleAction('return', reservation)}
+                        >
+                          Confirm Return
+                        </Button>
+                      )}
+                      {/* Cancel - available for both when pending/confirmed */}
+                      {['pending', 'confirmed'].includes(reservation.status) && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={() => handleAction('cancel', reservation)}
+                        >
+                          Cancel
+                        </Button>
+                      )}
                       <Button
                         size="small"
                         variant="outlined"
@@ -294,14 +426,44 @@ export default function MyReservations() {
       <>
         {renderGroup(
           isLender ? 'Pending Requests' : 'Pending Approval',
-          pending,
+          groups.pending,
           true
         )}
-        {renderGroup('Active & Upcoming', active)}
-        {renderGroup('Past', past)}
+        {renderGroup('Active & Upcoming', groups.active)}
+        {renderGroup('Past', groups.past)}
       </>
     );
   };
+
+  if (loading) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>
+          Reservations
+        </Typography>
+        <Skeleton variant="rectangular" height={48} sx={{ mb: 3 }} />
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} variant="rectangular" height={120} sx={{ mb: 2 }} />
+        ))}
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box>
+        <Typography variant="h4" gutterBottom>
+          Reservations
+        </Typography>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+        <Button variant="contained" onClick={loadReservations}>
+          Retry
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -318,13 +480,9 @@ export default function MyReservations() {
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>Borrowing</span>
-              {borrowerReservations.filter((r) => r.status === 'pending')
-                .length > 0 && (
+              {groupedBorrowerReservations.pending.length > 0 && (
                 <Chip
-                  label={
-                    borrowerReservations.filter((r) => r.status === 'pending')
-                      .length
-                  }
+                  label={groupedBorrowerReservations.pending.length}
                   size="small"
                   color="warning"
                 />
@@ -336,13 +494,9 @@ export default function MyReservations() {
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>Lending</span>
-              {lenderReservations.filter((r) => r.status === 'pending').length >
-                0 && (
+              {groupedLenderReservations.pending.length > 0 && (
                 <Chip
-                  label={
-                    lenderReservations.filter((r) => r.status === 'pending')
-                      .length
-                  }
+                  label={groupedLenderReservations.pending.length}
                   size="small"
                   color="warning"
                 />
@@ -360,7 +514,7 @@ export default function MyReservations() {
       <Dialog
         open={actionDialog.open}
         onClose={() =>
-          setActionDialog({ open: false, action: null, reservation: null })
+          !actionLoading && setActionDialog({ open: false, action: null, reservation: null })
         }
         maxWidth="sm"
         fullWidth
@@ -369,21 +523,19 @@ export default function MyReservations() {
           {actionDialog.action === 'approve' && 'Approve Reservation'}
           {actionDialog.action === 'decline' && 'Decline Reservation'}
           {actionDialog.action === 'cancel' && 'Cancel Reservation'}
+          {actionDialog.action === 'pickup' && 'Confirm Tool Pickup'}
+          {actionDialog.action === 'return' && 'Confirm Tool Return'}
         </DialogTitle>
         <DialogContent>
           {actionDialog.action === 'approve' && (
             <Alert severity="success" sx={{ mb: 2 }}>
               You are approving the reservation for{' '}
               <strong>{actionDialog.reservation?.tool?.name}</strong> from{' '}
-              {format(
-                parseISO(actionDialog.reservation?.startDate || ''),
-                'MMM d'
-              )}{' '}
+              {actionDialog.reservation?.startDate &&
+                format(parseISO(actionDialog.reservation.startDate), 'MMM d')}{' '}
               to{' '}
-              {format(
-                parseISO(actionDialog.reservation?.endDate || ''),
-                'MMM d, yyyy'
-              )}
+              {actionDialog.reservation?.endDate &&
+                format(parseISO(actionDialog.reservation.endDate), 'MMM d, yyyy')}
               .
             </Alert>
           )}
@@ -395,15 +547,31 @@ export default function MyReservations() {
           )}
           {actionDialog.action === 'cancel' && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              Are you sure you want to cancel this reservation? The owner will
+              Are you sure you want to cancel this reservation? The other party will
               be notified.
+            </Alert>
+          )}
+          {actionDialog.action === 'pickup' && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Confirming pickup will mark this loan as active. Make sure you have
+              physically received the tool.
+            </Alert>
+          )}
+          {actionDialog.action === 'return' && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              Confirming return will mark this loan as completed. Make sure you have
+              returned the tool to the owner.
             </Alert>
           )}
           <TextField
             fullWidth
             multiline
             rows={3}
-            label={actionDialog.action === 'cancel' ? 'Reason (optional)' : 'Note to borrower (optional)'}
+            label={
+              actionDialog.action === 'decline'
+                ? 'Reason (required)'
+                : 'Note (optional)'
+            }
             value={ownerNote}
             onChange={(e) => setOwnerNote(e.target.value)}
             placeholder={
@@ -411,8 +579,14 @@ export default function MyReservations() {
                 ? 'e.g., Pickup instructions, special notes...'
                 : actionDialog.action === 'decline'
                   ? 'e.g., Already reserved, tool needs repair...'
-                  : 'Let the owner know why you are cancelling...'
+                  : actionDialog.action === 'pickup'
+                    ? 'e.g., Tool condition notes...'
+                    : actionDialog.action === 'return'
+                      ? 'e.g., Thanks for letting me borrow it!'
+                      : 'Let the other party know why...'
             }
+            disabled={actionLoading}
+            required={actionDialog.action === 'decline'}
           />
         </DialogContent>
         <DialogActions>
@@ -420,26 +594,53 @@ export default function MyReservations() {
             onClick={() =>
               setActionDialog({ open: false, action: null, reservation: null })
             }
+            disabled={actionLoading}
           >
             Cancel
           </Button>
           <Button
             variant="contained"
             color={
-              actionDialog.action === 'approve'
+              actionDialog.action === 'approve' || actionDialog.action === 'return'
                 ? 'success'
-                : actionDialog.action === 'decline'
+                : actionDialog.action === 'decline' || actionDialog.action === 'cancel'
                   ? 'error'
-                  : 'error'
+                  : 'primary'
             }
             onClick={handleConfirmAction}
+            disabled={actionLoading || (actionDialog.action === 'decline' && !ownerNote.trim())}
+            startIcon={actionLoading ? <CircularProgress size={16} /> : undefined}
           >
-            {actionDialog.action === 'approve' && 'Approve'}
-            {actionDialog.action === 'decline' && 'Decline'}
-            {actionDialog.action === 'cancel' && 'Cancel Reservation'}
+            {actionLoading
+              ? 'Processing...'
+              : actionDialog.action === 'approve'
+                ? 'Approve'
+                : actionDialog.action === 'decline'
+                  ? 'Decline'
+                  : actionDialog.action === 'cancel'
+                    ? 'Cancel Reservation'
+                    : actionDialog.action === 'pickup'
+                      ? 'Confirm Pickup'
+                      : 'Confirm Return'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar for feedback */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={5000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

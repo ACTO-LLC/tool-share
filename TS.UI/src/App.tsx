@@ -42,6 +42,7 @@ function App() {
         <Route path="tools/:id" element={<ToolDetail />} />
         <Route path="my-tools" element={<MyTools />} />
         <Route path="my-tools/add" element={<AddTool />} />
+        <Route path="my-tools/edit/:id" element={<AddTool />} />
         <Route path="reservations" element={<MyReservations />} />
         <Route path="reservations/:id" element={<ReservationDetail />} />
         <Route path="circles" element={<Circles />} />

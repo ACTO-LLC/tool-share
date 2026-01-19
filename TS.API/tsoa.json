@@ -16,6 +16,10 @@
   },
   "routes": {
     "routesDir": "src/generated",
-    "authenticationModule": "src/middleware/auth.ts"
+    "authenticationModule": "src/middleware/auth.ts",
+    "multerOpts": {
+      "dest": "uploads/",
+      "storage": "memoryStorage"
+    }
   }
 }

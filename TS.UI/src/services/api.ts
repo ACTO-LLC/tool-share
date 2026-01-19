@@ -1,0 +1,583 @@
+/**
+ * API Service for Tool Share
+ * Handles all HTTP requests to the backend API
+ */
+
+import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
+import { apiRequest as apiScopeConfig } from '../config/auth';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+interface ApiOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  headers?: Record<string, string>;
+}
+
+class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// MSAL instance reference - set during app initialization
+let msalInstance: PublicClientApplication | null = null;
+
+/**
+ * Set the MSAL instance for token acquisition
+ * Call this during app initialization
+ */
+export function setMsalInstance(instance: PublicClientApplication): void {
+  msalInstance = instance;
+}
+
+/**
+ * Get the active account from MSAL
+ */
+function getActiveAccount() {
+  if (!msalInstance) {
+    return null;
+  }
+  const accounts = msalInstance.getAllAccounts();
+  return accounts[0] || null;
+}
+
+/**
+ * Acquire an access token for API calls using MSAL
+ */
+async function getAuthToken(): Promise<string | null> {
+  // In E2E test mode, return a mock token
+  if (import.meta.env.VITE_E2E_TEST === 'true') {
+    return 'mock-e2e-token';
+  }
+
+  if (!msalInstance) {
+    console.warn('MSAL instance not set - API calls will be unauthenticated');
+    return null;
+  }
+
+  const account = getActiveAccount();
+  if (!account) {
+    console.warn('No active MSAL account');
+    return null;
+  }
+
+  try {
+    // Try silent token acquisition first (uses cache)
+    const response = await msalInstance.acquireTokenSilent({
+      ...apiScopeConfig,
+      account,
+    });
+    return response.accessToken;
+  } catch (error) {
+    // If silent acquisition fails due to interaction required, try popup
+    if (error instanceof InteractionRequiredAuthError) {
+      try {
+        const response = await msalInstance.acquireTokenPopup({
+          ...apiScopeConfig,
+          account,
+        });
+        return response.accessToken;
+      } catch (popupError) {
+        console.error('Interactive token acquisition failed:', popupError);
+        return null;
+      }
+    }
+    console.error('Token acquisition failed:', error);
+    return null;
+  }
+}
+
+async function apiRequest<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  const { method = 'GET', body, headers = {} } = options;
+
+  const token = await getAuthToken();
+  const requestHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...headers,
+  };
+
+  if (token) {
+    requestHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method,
+    headers: requestHeaders,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new ApiError(
+      errorData.message || `HTTP ${response.status}`,
+      response.status,
+      errorData.code
+    );
+  }
+
+  // Handle 204 No Content
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();
+}
+
+/**
+ * Make a FormData API request (for file uploads)
+ */
+async function apiRequestFormData<T>(endpoint: string, formData: FormData): Promise<T> {
+  const token = await getAuthToken();
+  const requestHeaders: Record<string, string> = {};
+
+  if (token) {
+    requestHeaders['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Don't set Content-Type for FormData - browser will set it with boundary
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: requestHeaders,
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+    throw new ApiError(
+      errorData.message || `HTTP ${response.status}`,
+      response.status,
+      errorData.code
+    );
+  }
+
+  return response.json();
+}
+
+// Reservation types
+export interface Reservation {
+  id: string;
+  toolId: string;
+  borrowerId: string;
+  status: ReservationStatus;
+  startDate: string;
+  endDate: string;
+  note?: string;
+  ownerNote?: string;
+  pickupConfirmedAt?: string;
+  returnConfirmedAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+  tool?: Tool;
+  borrower?: User;
+}
+
+export type ReservationStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'active'
+  | 'completed'
+  | 'cancelled'
+  | 'declined';
+
+export interface Tool {
+  id: string;
+  ownerId: string;
+  name: string;
+  description?: string;
+  category: string;
+  brand?: string;
+  model?: string;
+  upc?: string;
+  status: 'available' | 'unavailable' | 'archived';
+  advanceNoticeDays: number;
+  maxLoanDays: number;
+  createdAt: string;
+  updatedAt?: string;
+  owner?: User;
+  photos?: ToolPhoto[];
+}
+
+export interface ToolPhoto {
+  id: string;
+  url: string;
+  isPrimary: boolean;
+  uploadedAt?: string;
+}
+
+export interface User {
+  id: string;
+  displayName: string;
+  email: string;
+  avatarUrl?: string;
+  city?: string;
+  state?: string;
+  reputationScore?: number;
+}
+
+export interface ReservationListResponse {
+  items: Reservation[];
+  total: number;
+}
+
+export interface DashboardStats {
+  toolsListed: number;
+  activeLoans: number;
+  pendingRequests: number;
+}
+
+export interface CreateReservationRequest {
+  toolId: string;
+  startDate: string;
+  endDate: string;
+  note?: string;
+}
+
+// Reservation API methods
+export const reservationApi = {
+  /**
+   * Get all reservations for the current user
+   */
+  async list(params?: {
+    role?: 'borrower' | 'lender' | 'all';
+    status?: string;
+  }): Promise<ReservationListResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.role) queryParams.append('role', params.role);
+    if (params?.status) queryParams.append('status', params.status);
+
+    const queryString = queryParams.toString();
+    const endpoint = `/api/reservations${queryString ? `?${queryString}` : ''}`;
+
+    return apiRequest<ReservationListResponse>(endpoint);
+  },
+
+  /**
+   * Get a specific reservation by ID
+   */
+  async get(id: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}`);
+  },
+
+  /**
+   * Create a new reservation request
+   */
+  async create(data: CreateReservationRequest): Promise<Reservation> {
+    return apiRequest<Reservation>('/api/reservations', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  /**
+   * Approve a pending reservation (owner only)
+   */
+  async approve(id: string, note?: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}/approve`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
+  /**
+   * Decline a pending reservation (owner only)
+   */
+  async decline(id: string, reason: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}/decline`, {
+      method: 'POST',
+      body: { reason },
+    });
+  },
+
+  /**
+   * Cancel a reservation (borrower or owner)
+   */
+  async cancel(id: string, note?: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}/cancel`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
+  /**
+   * Confirm tool pickup (borrower only)
+   */
+  async pickup(id: string, note?: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}/pickup`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
+  /**
+   * Confirm tool return (borrower only)
+   */
+  async return(id: string, note?: string): Promise<Reservation> {
+    return apiRequest<Reservation>(`/api/reservations/${id}/return`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
+  /**
+   * Get dashboard statistics
+   */
+  async getDashboardStats(): Promise<DashboardStats> {
+    return apiRequest<DashboardStats>('/api/reservations/stats/dashboard');
+  },
+};
+
+// ============================================================================
+// Tool Types
+// ============================================================================
+
+export interface ToolListResponse {
+  tools: Tool[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface ToolLookupResponse {
+  found: boolean;
+  name?: string;
+  brand?: string;
+  model?: string;
+  description?: string;
+  category?: string;
+  imageUrl?: string;
+}
+
+export interface CreateToolRequest {
+  name: string;
+  description?: string;
+  category: string;
+  brand?: string;
+  model?: string;
+  upc?: string;
+  advanceNoticeDays?: number;
+  maxLoanDays?: number;
+  circleIds?: string[];
+}
+
+export interface UpdateToolRequest {
+  name?: string;
+  description?: string;
+  category?: string;
+  brand?: string;
+  model?: string;
+  status?: 'available' | 'unavailable';
+  advanceNoticeDays?: number;
+  maxLoanDays?: number;
+}
+
+export interface PhotoUploadResponse {
+  id: string;
+  url: string;
+  isPrimary: boolean;
+}
+
+// ============================================================================
+// Tool API
+// ============================================================================
+
+export const toolsApi = {
+  /**
+   * Get all tool categories
+   */
+  async getCategories(): Promise<string[]> {
+    return apiRequest<string[]>('/api/tools/categories');
+  },
+
+  /**
+   * Look up tool by UPC barcode
+   */
+  async lookupUpc(upc: string): Promise<ToolLookupResponse> {
+    return apiRequest<ToolLookupResponse>(`/api/tools/lookup?upc=${encodeURIComponent(upc)}`);
+  },
+
+  /**
+   * Search products by name (UPCitemdb)
+   */
+  async lookupSearch(query: string): Promise<{ results: Array<{ upc: string; name: string; brand?: string }> }> {
+    return apiRequest(`/api/tools/lookup/search?q=${encodeURIComponent(query)}`);
+  },
+
+  /**
+   * Search available tools with filters
+   */
+  async search(params?: {
+    q?: string;
+    category?: string;
+    circleId?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<ToolListResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.q) queryParams.append('q', params.q);
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.circleId) queryParams.append('circleId', params.circleId);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+
+    const queryString = queryParams.toString();
+    return apiRequest<ToolListResponse>(`/api/tools/search${queryString ? `?${queryString}` : ''}`);
+  },
+
+  /**
+   * Browse all available tools (with optional category filter)
+   */
+  async browse(params?: {
+    category?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<ToolListResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.category) queryParams.append('category', params.category);
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+
+    const queryString = queryParams.toString();
+    return apiRequest<ToolListResponse>(`/api/tools/browse${queryString ? `?${queryString}` : ''}`);
+  },
+
+  /**
+   * Get a specific tool by ID
+   */
+  async get(id: string): Promise<Tool> {
+    return apiRequest<Tool>(`/api/tools/${id}`);
+  },
+
+  /**
+   * Get tools owned by the current user
+   */
+  async getMyTools(): Promise<Tool[]> {
+    return apiRequest<Tool[]>('/api/tools/my/tools');
+  },
+
+  /**
+   * Create a new tool
+   */
+  async create(data: CreateToolRequest): Promise<Tool> {
+    return apiRequest<Tool>('/api/tools', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  /**
+   * Update a tool
+   */
+  async update(id: string, data: UpdateToolRequest): Promise<Tool> {
+    return apiRequest<Tool>(`/api/tools/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  },
+
+  /**
+   * Delete (archive) a tool
+   */
+  async delete(id: string): Promise<void> {
+    return apiRequest<void>(`/api/tools/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Upload a photo for a tool
+   */
+  async uploadPhoto(toolId: string, file: File, isPrimary: boolean = false): Promise<PhotoUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('isPrimary', isPrimary.toString());
+
+    return apiRequestFormData<PhotoUploadResponse>(`/api/tools/${toolId}/photos`, formData);
+  },
+
+  /**
+   * Delete a photo from a tool
+   */
+  async deletePhoto(toolId: string, photoId: string): Promise<void> {
+    return apiRequest<void>(`/api/tools/${toolId}/photos/${photoId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Set a photo as primary
+   */
+  async setPhotoPrimary(toolId: string, photoId: string): Promise<{ success: boolean }> {
+    return apiRequest<{ success: boolean }>(`/api/tools/${toolId}/photos/${photoId}/primary`, {
+      method: 'PUT',
+    });
+  },
+};
+
+// ============================================================================
+// User Profile Types
+// ============================================================================
+
+export interface UserProfile {
+  id: string;
+  externalId: string;
+  displayName: string;
+  email: string;
+  phone?: string;
+  avatarUrl?: string;
+  bio?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  reputationScore: number;
+  notifyEmail: boolean;
+  subscriptionStatus: string;
+  subscriptionEndsAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UpdateProfileRequest {
+  displayName?: string;
+  phone?: string;
+  avatarUrl?: string;
+  bio?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  notifyEmail?: boolean;
+}
+
+// ============================================================================
+// User Profile API
+// ============================================================================
+
+export const userApi = {
+  /**
+   * Get the current user's profile
+   * Creates a new user record on first login
+   */
+  async getCurrentUser(): Promise<UserProfile> {
+    return apiRequest<UserProfile>('/api/users/me');
+  },
+
+  /**
+   * Update the current user's profile
+   */
+  async updateProfile(data: UpdateProfileRequest): Promise<UserProfile> {
+    return apiRequest<UserProfile>('/api/users/me', {
+      method: 'PUT',
+      body: data,
+    });
+  },
+};
+
+export { ApiError };
+export default { toolsApi, reservationApi, userApi };

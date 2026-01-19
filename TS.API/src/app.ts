@@ -2,10 +2,30 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import multer from 'multer';
 import swaggerUi from 'swagger-ui-express';
 import { RegisterRoutes } from './generated/routes';
 import { ValidateError } from 'tsoa';
 import { config } from './config/env';
+
+// Configure multer for file uploads (memory storage for blob upload)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max file size
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed: JPEG, PNG, GIF, WebP'));
+    }
+  },
+});
+
+// Export multer instance for TSOA
+export { upload };
 
 const app: Express = express();
 

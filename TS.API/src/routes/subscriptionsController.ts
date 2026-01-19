@@ -7,7 +7,6 @@ import {
   Security,
   Request,
   SuccessResponse,
-  Hidden,
 } from 'tsoa';
 import { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { AuthenticatedUser } from '../middleware/auth';
@@ -15,7 +14,6 @@ import Stripe from 'stripe';
 import { config } from '../config/env';
 import {
   getUserByExternalId,
-  getUserById,
   updateUserSubscription,
 } from '../services/dabService';
 
@@ -239,7 +237,7 @@ export class SubscriptionsController extends Controller {
   @Get('/status')
   @Security('Bearer')
   @SuccessResponse(200, 'Subscription status retrieved')
-  public async getStatus(
+  public async getSubscriptionStatus(
     @Request() request: ExpressRequest
   ): Promise<SubscriptionStatusResponse> {
     const authUser = request.user as AuthenticatedUser;

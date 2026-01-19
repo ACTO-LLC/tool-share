@@ -603,7 +603,7 @@ export const toolsApi = {
   },
 
   /**
-   * Browse all available tools (with optional category filter)
+   * Browse all available tools (with optional filters)
    */
   async browse(params?: {
     category?: string;
@@ -958,7 +958,7 @@ export const subscriptionApi = {
   },
 
   /**
-   * Create a checkout session to subscribe
+   * Create a checkout session for subscription
    */
   async createCheckout(): Promise<CheckoutResponse> {
     return apiRequest<CheckoutResponse>('/api/subscriptions/checkout', {
@@ -967,7 +967,7 @@ export const subscriptionApi = {
   },
 
   /**
-   * Get Stripe Customer Portal URL
+   * Get portal URL for managing subscription
    */
   async getPortal(): Promise<PortalResponse> {
     return apiRequest<PortalResponse>('/api/subscriptions/portal');
@@ -975,47 +975,10 @@ export const subscriptionApi = {
 };
 
 // ============================================================================
-// User History Types
+// User Profile API (extended)
 // ============================================================================
 
-export interface LendingHistoryItem {
-  id: string;
-  toolId: string;
-  toolName: string;
-  borrowerName: string;
-  borrowerAvatarUrl?: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-  completedAt?: string;
-}
-
-export interface BorrowingHistoryItem {
-  id: string;
-  toolId: string;
-  toolName: string;
-  ownerName: string;
-  ownerAvatarUrl?: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-  completedAt?: string;
-}
-
-export interface UserHistoryStats {
-  totalLends: number;
-  totalBorrows: number;
-  activeLends: number;
-  activeBorrows: number;
-}
-
-export interface UserHistoryResponse {
-  lending: LendingHistoryItem[];
-  borrowing: BorrowingHistoryItem[];
-  stats: UserHistoryStats;
-}
-
-export interface PublicProfileResponse {
+export interface PublicUserProfile {
   id: string;
   displayName: string;
   avatarUrl?: string;
@@ -1026,16 +989,35 @@ export interface PublicProfileResponse {
   memberSince: string;
 }
 
-// ============================================================================
-// Extended User API
-// ============================================================================
+export interface HistoryItem {
+  id: string;
+  toolId: string;
+  toolName: string;
+  toolCategory: string;
+  startDate: string;
+  endDate: string;
+  otherUserId: string;
+  otherUserName: string;
+  otherUserAvatarUrl?: string;
+  hasReview: boolean;
+}
+
+export interface UserHistoryResponse {
+  lendingHistory: HistoryItem[];
+  borrowingHistory: HistoryItem[];
+  stats: {
+    totalLoans: number;
+    totalLends: number;
+    memberSince: string;
+  };
+}
 
 export const userProfileApi = {
   /**
-   * Get public profile for a user
+   * Get a user's public profile
    */
-  async getPublicProfile(userId: string): Promise<PublicProfileResponse> {
-    return apiRequest<PublicProfileResponse>(`/api/users/${userId}`);
+  async getPublicProfile(userId: string): Promise<PublicUserProfile> {
+    return apiRequest<PublicUserProfile>(`/api/users/${userId}`);
   },
 
   /**
@@ -1046,7 +1028,7 @@ export const userProfileApi = {
   },
 
   /**
-   * Get a user's public history
+   * Get a user's history
    */
   async getUserHistory(userId: string): Promise<UserHistoryResponse> {
     return apiRequest<UserHistoryResponse>(`/api/users/${userId}/history`);
@@ -1055,8 +1037,15 @@ export const userProfileApi = {
   /**
    * Get current user's reviews
    */
-  async getMyReviews(): Promise<UserReviewsResponse> {
-    return apiRequest<UserReviewsResponse>('/api/users/me/reviews');
+  async getMyReviews(): Promise<Review[]> {
+    return apiRequest<Review[]>('/api/users/me/reviews');
+  },
+
+  /**
+   * Get a user's reviews
+   */
+  async getUserReviews(userId: string): Promise<Review[]> {
+    return apiRequest<Review[]>(`/api/users/${userId}/reviews`);
   },
 };
 

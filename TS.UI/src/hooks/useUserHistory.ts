@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { userProfileApi, reviewsApi, UserHistoryResponse, UserReviewsResponse } from '../services/api';
+import { userProfileApi, reviewsApi } from '../services/api';
 
 /**
  * Query key for user history

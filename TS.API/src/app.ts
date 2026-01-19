@@ -30,6 +30,14 @@ export { upload };
 
 const app: Express = express();
 
+// Stripe webhook route - MUST be registered before express.json() middleware
+// because Stripe requires the raw body for signature verification
+app.post(
+  '/api/subscriptions/webhook',
+  express.raw({ type: 'application/json' }),
+  handleStripeWebhook
+);
+
 // Middleware
 app.use(helmet());
 app.use(cors({

@@ -19,6 +19,10 @@ import {
   Divider,
   useTheme,
   useMediaQuery,
+  BottomNavigation,
+  BottomNavigationAction,
+  Paper,
+  SwipeableDrawer,
 } from '@mui/material';
 import {
   Menu as MenuIcon,
@@ -29,6 +33,7 @@ import {
   Group as GroupIcon,
   Person as PersonIcon,
   Logout as LogoutIcon,
+  MoreHoriz as MoreIcon,
 } from '@mui/icons-material';
 import NotificationBell from './NotificationBell';
 
@@ -42,10 +47,20 @@ const navItems = [
   { text: 'Circles', icon: <GroupIcon />, path: '/circles' },
 ];
 
+// Bottom nav items (4 main + more)
+const bottomNavItems = [
+  { text: 'Home', icon: <DashboardIcon />, path: '/' },
+  { text: 'Browse', icon: <SearchIcon />, path: '/browse' },
+  { text: 'My Tools', icon: <BuildIcon />, path: '/my-tools' },
+  { text: 'Bookings', icon: <CalendarIcon />, path: '/reservations' },
+];
+
 export default function Layout() {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -69,6 +84,28 @@ export default function Layout() {
     instance.logoutRedirect();
   };
 
+  const handleBottomNavChange = (
+    _event: React.SyntheticEvent,
+    newValue: string
+  ) => {
+    if (newValue === 'more') {
+      setMoreDrawerOpen(true);
+    } else {
+      navigate(newValue);
+    }
+  };
+
+  const getBottomNavValue = () => {
+    const currentPath = location.pathname;
+    const bottomNavPath = bottomNavItems.find(
+      (item) => item.path === currentPath
+    )?.path;
+    if (bottomNavPath) return bottomNavPath;
+    // Check if it's a more menu item
+    if (currentPath === '/circles' || currentPath === '/profile') return 'more';
+    return '/';
+  };
+
   const drawer = (
     <Box>
       <Toolbar>
@@ -84,14 +121,72 @@ export default function Layout() {
               selected={location.pathname === item.path}
               onClick={() => {
                 navigate(item.path);
-                if (isMobile) setMobileOpen(false);
+                if (isTablet) setMobileOpen(false);
               }}
+              sx={{ minHeight: 48 }}
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.text} />
             </ListItemButton>
           </ListItem>
         ))}
+      </List>
+    </Box>
+  );
+
+  const moreDrawer = (
+    <Box sx={{ width: '100%', pt: 2, pb: 4 }}>
+      <Typography
+        variant="subtitle2"
+        color="text.secondary"
+        sx={{ px: 2, pb: 1 }}
+      >
+        More Options
+      </Typography>
+      <List>
+        <ListItem disablePadding>
+          <ListItemButton
+            onClick={() => {
+              navigate('/circles');
+              setMoreDrawerOpen(false);
+            }}
+            sx={{ minHeight: 48 }}
+          >
+            <ListItemIcon>
+              <GroupIcon />
+            </ListItemIcon>
+            <ListItemText primary="Circles" />
+          </ListItemButton>
+        </ListItem>
+        <ListItem disablePadding>
+          <ListItemButton
+            onClick={() => {
+              navigate('/profile');
+              setMoreDrawerOpen(false);
+            }}
+            sx={{ minHeight: 48 }}
+          >
+            <ListItemIcon>
+              <PersonIcon />
+            </ListItemIcon>
+            <ListItemText primary="Profile" />
+          </ListItemButton>
+        </ListItem>
+        <Divider sx={{ my: 1 }} />
+        <ListItem disablePadding>
+          <ListItemButton
+            onClick={() => {
+              handleLogout();
+              setMoreDrawerOpen(false);
+            }}
+            sx={{ minHeight: 48 }}
+          >
+            <ListItemIcon>
+              <LogoutIcon />
+            </ListItemIcon>
+            <ListItemText primary="Logout" />
+          </ListItemButton>
+        </ListItem>
       </List>
     </Box>
   );
@@ -105,53 +200,83 @@ export default function Layout() {
           ml: { md: `${drawerWidth}px` },
         }}
       >
-        <Toolbar>
-          <IconButton
-            color="inherit"
-            edge="start"
-            onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { md: 'none' } }}
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 } }}>
+          {/* Hamburger menu for tablet only (mobile uses bottom nav) */}
+          {isTablet && !isMobile && (
+            <IconButton
+              color="inherit"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
+          <Typography
+            variant={isMobile ? 'subtitle1' : 'h6'}
+            noWrap
+            component="div"
+            sx={{ flexGrow: 1 }}
           >
-            <MenuIcon />
-          </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {navItems.find((item) => item.path === location.pathname)?.text || 'Tool Share'}
+            {navItems.find((item) => item.path === location.pathname)?.text ||
+              'Tool Share'}
           </Typography>
           <NotificationBell />
-          <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0, ml: 1 }}>
-            <Avatar alt={account?.name || 'User'}>
-              {account?.name?.charAt(0) || 'U'}
-            </Avatar>
-          </IconButton>
-          <Menu
-            anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
-            onClose={handleProfileMenuClose}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          >
-            <MenuItem onClick={() => { navigate('/profile'); handleProfileMenuClose(); }}>
-              <ListItemIcon><PersonIcon fontSize="small" /></ListItemIcon>
-              Profile
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon><LogoutIcon fontSize="small" /></ListItemIcon>
-              Logout
-            </MenuItem>
-          </Menu>
+          {/* Profile avatar - visible on tablet/desktop, hidden on mobile (in more menu) */}
+          {!isMobile && (
+            <>
+              <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0, ml: 1 }}>
+                <Avatar
+                  alt={account?.name || 'User'}
+                  sx={{ width: 36, height: 36 }}
+                >
+                  {account?.name?.charAt(0) || 'U'}
+                </Avatar>
+              </IconButton>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleProfileMenuClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    navigate('/profile');
+                    handleProfileMenuClose();
+                  }}
+                  sx={{ minHeight: 48 }}
+                >
+                  <ListItemIcon>
+                    <PersonIcon fontSize="small" />
+                  </ListItemIcon>
+                  Profile
+                </MenuItem>
+                <Divider />
+                <MenuItem onClick={handleLogout} sx={{ minHeight: 48 }}>
+                  <ListItemIcon>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
+              </Menu>
+            </>
+          )}
         </Toolbar>
       </AppBar>
+
+      {/* Side drawer - tablet and desktop */}
       <Box
         component="nav"
         sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
       >
         <Drawer
-          variant={isMobile ? 'temporary' : 'permanent'}
-          open={isMobile ? mobileOpen : true}
+          variant={isTablet ? 'temporary' : 'permanent'}
+          open={isTablet ? mobileOpen : true}
           onClose={handleDrawerToggle}
           ModalProps={{ keepMounted: true }}
           sx={{
+            display: { xs: 'none', sm: 'block' },
             '& .MuiDrawer-paper': {
               boxSizing: 'border-box',
               width: drawerWidth,
@@ -161,17 +286,91 @@ export default function Layout() {
           {drawer}
         </Drawer>
       </Box>
+
+      {/* Main content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, sm: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
-          mt: '64px',
+          mt: { xs: '56px', sm: '64px' },
+          mb: { xs: '56px', sm: 0 },
+          minHeight: {
+            xs: 'calc(100vh - 56px - 56px)',
+            sm: 'calc(100vh - 64px)',
+          },
+          overflow: 'auto',
         }}
       >
         <Outlet />
       </Box>
+
+      {/* Bottom Navigation - Mobile only */}
+      {isMobile && (
+        <Paper
+          sx={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: theme.zIndex.appBar,
+          }}
+          elevation={3}
+        >
+          <BottomNavigation
+            value={getBottomNavValue()}
+            onChange={handleBottomNavChange}
+            sx={{
+              height: 56,
+              '& .MuiBottomNavigationAction-root': {
+                minWidth: 'auto',
+                padding: '6px 0',
+                '&.Mui-selected': {
+                  paddingTop: '6px',
+                },
+              },
+              '& .MuiBottomNavigationAction-label': {
+                fontSize: '0.625rem',
+                '&.Mui-selected': {
+                  fontSize: '0.625rem',
+                },
+              },
+            }}
+          >
+            {bottomNavItems.map((item) => (
+              <BottomNavigationAction
+                key={item.path}
+                value={item.path}
+                label={item.text}
+                icon={item.icon}
+              />
+            ))}
+            <BottomNavigationAction
+              value="more"
+              label="More"
+              icon={<MoreIcon />}
+            />
+          </BottomNavigation>
+        </Paper>
+      )}
+
+      {/* More Drawer - Mobile bottom sheet */}
+      <SwipeableDrawer
+        anchor="bottom"
+        open={moreDrawerOpen}
+        onClose={() => setMoreDrawerOpen(false)}
+        onOpen={() => setMoreDrawerOpen(true)}
+        disableSwipeToOpen
+        sx={{
+          '& .MuiDrawer-paper': {
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+          },
+        }}
+      >
+        {moreDrawer}
+      </SwipeableDrawer>
     </Box>
   );
 }

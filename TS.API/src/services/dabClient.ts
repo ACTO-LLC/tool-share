@@ -313,6 +313,10 @@ class DabClient {
       query?: string;
       category?: string;
       circleId?: string;
+      ownerId?: string;
+      availableFrom?: string;
+      availableTo?: string;
+      sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc';
       page?: number;
       pageSize?: number;
     },
@@ -325,9 +329,23 @@ class DabClient {
       filters.push(`category: { eq: "${params.category}" }`);
     }
 
+    if (params.ownerId) {
+      filters.push(`ownerId: { eq: "${params.ownerId}" }`);
+    }
+
     // Note: Full-text search on name/description would require a custom view or stored procedure
     // For now, we'll use contains filter which may not perform as well
     // In production, consider Azure Cognitive Search for better full-text search
+
+    // Determine sort order based on sortBy parameter
+    let orderBy = '{ createdAt: DESC }';
+    if (params.sortBy === 'nameAsc') {
+      orderBy = '{ name: ASC }';
+    } else if (params.sortBy === 'nameDesc') {
+      orderBy = '{ name: DESC }';
+    } else if (params.sortBy === 'dateAdded') {
+      orderBy = '{ createdAt: DESC }';
+    }
 
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
@@ -339,7 +357,7 @@ class DabClient {
           filter: { ${filters.join(', ')} }
           first: $first
           after: $after
-          orderBy: { createdAt: DESC }
+          orderBy: ${orderBy}
         ) {
           items {
             id
@@ -408,6 +426,12 @@ class DabClient {
         return searchTerms.every(term => searchableText.includes(term));
       });
     }
+
+    // TODO: Circle filtering would require joining with toolCircles table
+    // For now, this would need to be done client-side or with a custom view
+
+    // TODO: Availability filtering would require checking reservations
+    // Filter out tools with conflicting reservations in the date range
 
     return {
       tools,

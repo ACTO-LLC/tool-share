@@ -1,19 +1,40 @@
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useIsAuthenticated } from '@azure/msal-react';
+import { Box, CircularProgress } from '@mui/material';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import BrowseTools from './pages/BrowseTools';
-import ToolDetail from './pages/ToolDetail';
-import MyTools from './pages/MyTools';
-import AddTool from './pages/AddTool';
-import MyReservations from './pages/MyReservations';
-import ReservationDetail from './pages/ReservationDetail';
-import Circles from './pages/Circles';
-import CircleDetail from './pages/CircleDetail';
-import CreateCircle from './pages/CreateCircle';
-import JoinCircle from './pages/JoinCircle';
-import Profile from './pages/Profile';
-import Login from './pages/Login';
+
+// Lazy-loaded page components for code splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const BrowseTools = lazy(() => import('./pages/BrowseTools'));
+const ToolDetail = lazy(() => import('./pages/ToolDetail'));
+const MyTools = lazy(() => import('./pages/MyTools'));
+const AddTool = lazy(() => import('./pages/AddTool'));
+const MyReservations = lazy(() => import('./pages/MyReservations'));
+const ReservationDetail = lazy(() => import('./pages/ReservationDetail'));
+const Circles = lazy(() => import('./pages/Circles'));
+const CircleDetail = lazy(() => import('./pages/CircleDetail'));
+const CreateCircle = lazy(() => import('./pages/CreateCircle'));
+const JoinCircle = lazy(() => import('./pages/JoinCircle'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Login = lazy(() => import('./pages/Login'));
+
+// Loading fallback component for Suspense
+function PageLoader() {
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '50vh',
+      }}
+    >
+      <CircularProgress />
+    </Box>
+  );
+}
 
 const isE2ETest = import.meta.env.VITE_E2E_TEST === 'true';
 
@@ -30,31 +51,34 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route
-        path="/"
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="browse" element={<BrowseTools />} />
-        <Route path="tools/:id" element={<ToolDetail />} />
-        <Route path="my-tools" element={<MyTools />} />
-        <Route path="my-tools/add" element={<AddTool />} />
-        <Route path="my-tools/edit/:id" element={<AddTool />} />
-        <Route path="reservations" element={<MyReservations />} />
-        <Route path="reservations/:id" element={<ReservationDetail />} />
-        <Route path="circles" element={<Circles />} />
-        <Route path="circles/create" element={<CreateCircle />} />
-        <Route path="circles/join" element={<JoinCircle />} />
-        <Route path="circles/:id" element={<CircleDetail />} />
-        <Route path="profile" element={<Profile />} />
-      </Route>
-    </Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="browse" element={<BrowseTools />} />
+          <Route path="tools/:id" element={<ToolDetail />} />
+          <Route path="my-tools" element={<MyTools />} />
+          <Route path="my-tools/add" element={<AddTool />} />
+          <Route path="my-tools/edit/:id" element={<AddTool />} />
+          <Route path="reservations" element={<MyReservations />} />
+          <Route path="reservations/:id" element={<ReservationDetail />} />
+          <Route path="circles" element={<Circles />} />
+          <Route path="circles/create" element={<CreateCircle />} />
+          <Route path="circles/join" element={<JoinCircle />} />
+          <Route path="circles/:id" element={<CircleDetail />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="notifications" element={<Notifications />} />
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 

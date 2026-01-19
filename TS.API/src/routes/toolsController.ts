@@ -152,6 +152,10 @@ export class ToolsController extends Controller {
     @Query() q?: string,
     @Query() category?: string,
     @Query() circleId?: string,
+    @Query() ownerId?: string,
+    @Query() availableFrom?: string,
+    @Query() availableTo?: string,
+    @Query() sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc',
     @Query() page?: number,
     @Query() pageSize?: number
   ): Promise<ToolListResponse> {
@@ -162,6 +166,10 @@ export class ToolsController extends Controller {
         query: q,
         category,
         circleId,
+        ownerId,
+        availableFrom,
+        availableTo,
+        sortBy: sortBy || 'relevance',
         page: page || 1,
         pageSize: pageSize || 20,
       },
@@ -187,16 +195,53 @@ export class ToolsController extends Controller {
   public async browseTools(
     @Request() request: ExpressRequest,
     @Query() category?: string,
+    @Query() circleId?: string,
+    @Query() ownerId?: string,
+    @Query() availableFrom?: string,
+    @Query() availableTo?: string,
+    @Query() sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc',
     @Query() page?: number,
     @Query() pageSize?: number
   ): Promise<ToolListResponse> {
     const authToken = this.getAuthToken(request);
     const allTools = await dabClient.getAllAvailableTools(authToken);
 
-    // Apply category filter if provided
+    // Apply filters
     let filteredTools = allTools;
+
     if (category) {
-      filteredTools = allTools.filter(t => t.category === category);
+      filteredTools = filteredTools.filter(t => t.category === category);
+    }
+
+    if (ownerId) {
+      filteredTools = filteredTools.filter(t => t.ownerId === ownerId);
+    }
+
+    // TODO: Circle filtering would require additional DB query to check tool-circle associations
+    // For now, circleId filtering is handled in the search endpoint with DAB
+
+    // TODO: Availability filtering would require checking reservations
+    // For now, this is a placeholder - would need to query reservations table
+    // and exclude tools with conflicting reservations in the date range
+
+    // Apply sorting
+    if (sortBy) {
+      switch (sortBy) {
+        case 'nameAsc':
+          filteredTools.sort((a, b) => a.name.localeCompare(b.name));
+          break;
+        case 'nameDesc':
+          filteredTools.sort((a, b) => b.name.localeCompare(a.name));
+          break;
+        case 'dateAdded':
+          filteredTools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          break;
+        case 'relevance':
+        default:
+          // Default sorting by createdAt desc
+          filteredTools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          break;
+      }
     }
 
     // Apply pagination

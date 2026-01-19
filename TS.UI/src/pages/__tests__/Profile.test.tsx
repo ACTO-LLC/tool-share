@@ -6,12 +6,17 @@ import { renderWithProviders, createTestQueryClient } from '../../test/utils';
 import { userApi, UserProfile } from '../../services/api';
 
 // Mock the API module
-vi.mock('../../services/api', () => ({
-  userApi: {
-    getCurrentUser: vi.fn(),
-    updateProfile: vi.fn(),
-  },
-}));
+vi.mock('../../services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/api')>();
+  return {
+    ...actual,
+    userApi: {
+      getCurrentUser: vi.fn(),
+      updateProfile: vi.fn(),
+    },
+    setMsalInstance: vi.fn(),
+  };
+});
 
 // Mock useMsal
 vi.mock('@azure/msal-react', async () => {

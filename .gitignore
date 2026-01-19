@@ -103,3 +103,5 @@ tsoa-routes.ts
 **/all-requirements.md
 **/BRD*.md
 client-*
+iac/tenant-info.json
+iac/*-config-*.json

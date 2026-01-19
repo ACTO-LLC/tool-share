@@ -9,6 +9,9 @@ import AddTool from './pages/AddTool';
 import MyReservations from './pages/MyReservations';
 import ReservationDetail from './pages/ReservationDetail';
 import Circles from './pages/Circles';
+import CircleDetail from './pages/CircleDetail';
+import CreateCircle from './pages/CreateCircle';
+import JoinCircle from './pages/JoinCircle';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 
@@ -46,6 +49,9 @@ function App() {
         <Route path="reservations" element={<MyReservations />} />
         <Route path="reservations/:id" element={<ReservationDetail />} />
         <Route path="circles" element={<Circles />} />
+        <Route path="circles/create" element={<CreateCircle />} />
+        <Route path="circles/join" element={<JoinCircle />} />
+        <Route path="circles/:id" element={<CircleDetail />} />
         <Route path="profile" element={<Profile />} />
       </Route>
     </Routes>

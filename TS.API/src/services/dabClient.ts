@@ -701,6 +701,332 @@ class DabClient {
     await this.query(mutation, { id: toolCircleId }, authToken);
   }
 
+  // ==================== CIRCLE MANAGEMENT ====================
+
+  async createCircle(
+    input: {
+      name: string;
+      description?: string;
+      isPublic: boolean;
+      createdBy: string;
+      inviteCode: string;
+    },
+    authToken?: string
+  ): Promise<Circle> {
+    const mutation = `
+      mutation CreateCircle($item: CreateCircleInput!) {
+        createCircle(item: $item) {
+          id
+          name
+          description
+          inviteCode
+          isPublic
+          createdBy
+          createdAt
+        }
+      }
+    `;
+
+    const result = await this.query<{ createCircle: Circle }>(
+      mutation,
+      {
+        item: {
+          id: crypto.randomUUID(),
+          name: input.name,
+          description: input.description || null,
+          isPublic: input.isPublic,
+          createdBy: input.createdBy,
+          inviteCode: input.inviteCode,
+          createdAt: new Date().toISOString(),
+        },
+      },
+      authToken
+    );
+
+    return result.createCircle;
+  }
+
+  async getCircleById(id: string, authToken?: string): Promise<Circle | null> {
+    const query = `
+      query GetCircle($id: ID!) {
+        circle_by_pk(id: $id) {
+          id
+          name
+          description
+          inviteCode
+          isPublic
+          createdBy
+          createdAt
+        }
+      }
+    `;
+
+    const result = await this.query<{ circle_by_pk: Circle | null }>(
+      query,
+      { id },
+      authToken
+    );
+
+    return result.circle_by_pk;
+  }
+
+  async getCircleByInviteCode(inviteCode: string, authToken?: string): Promise<Circle | null> {
+    const query = `
+      query GetCircleByInviteCode($inviteCode: String!) {
+        circles(filter: { inviteCode: { eq: $inviteCode } }) {
+          items {
+            id
+            name
+            description
+            inviteCode
+            isPublic
+            createdBy
+            createdAt
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{ circles: { items: Circle[] } }>(
+      query,
+      { inviteCode },
+      authToken
+    );
+
+    return result.circles.items[0] || null;
+  }
+
+  async getCirclesByUser(
+    userId: string,
+    authToken?: string
+  ): Promise<Array<Circle & { memberCount: number; currentUserRole: 'member' | 'admin' | 'owner' }>> {
+    const query = `
+      query GetCirclesByUser($userId: ID!) {
+        circleMembers(filter: { userId: { eq: $userId } }) {
+          items {
+            id
+            role
+            circle {
+              id
+              name
+              description
+              inviteCode
+              isPublic
+              createdBy
+              createdAt
+              members {
+                items {
+                  id
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{
+      circleMembers: {
+        items: Array<{
+          id: string;
+          role: 'member' | 'admin' | 'owner';
+          circle: Circle & { members: { items: Array<{ id: string }> } };
+        }>;
+      };
+    }>(query, { userId }, authToken);
+
+    return result.circleMembers.items.map(membership => ({
+      ...membership.circle,
+      memberCount: membership.circle.members?.items?.length || 0,
+      currentUserRole: membership.role,
+    }));
+  }
+
+  async getCircleMembers(
+    circleId: string,
+    authToken?: string
+  ): Promise<Array<CircleMember & { user?: User }>> {
+    const query = `
+      query GetCircleMembers($circleId: ID!) {
+        circleMembers(filter: { circleId: { eq: $circleId } }) {
+          items {
+            id
+            circleId
+            userId
+            role
+            joinedAt
+            user {
+              id
+              displayName
+              email
+              avatarUrl
+              reputationScore
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{
+      circleMembers: { items: Array<CircleMember & { user?: User }> };
+    }>(query, { circleId }, authToken);
+
+    return result.circleMembers.items;
+  }
+
+  async getCircleMembership(
+    circleId: string,
+    userId: string,
+    authToken?: string
+  ): Promise<CircleMember | null> {
+    const query = `
+      query GetCircleMembership($circleId: ID!, $userId: ID!) {
+        circleMembers(filter: { circleId: { eq: $circleId }, userId: { eq: $userId } }) {
+          items {
+            id
+            circleId
+            userId
+            role
+            joinedAt
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{ circleMembers: { items: CircleMember[] } }>(
+      query,
+      { circleId, userId },
+      authToken
+    );
+
+    return result.circleMembers.items[0] || null;
+  }
+
+  async createCircleMember(
+    input: {
+      circleId: string;
+      userId: string;
+      role: 'member' | 'admin' | 'owner';
+    },
+    authToken?: string
+  ): Promise<CircleMember> {
+    const mutation = `
+      mutation CreateCircleMember($item: CreateCircleMemberInput!) {
+        createCircleMember(item: $item) {
+          id
+          circleId
+          userId
+          role
+          joinedAt
+        }
+      }
+    `;
+
+    const result = await this.query<{ createCircleMember: CircleMember }>(
+      mutation,
+      {
+        item: {
+          id: crypto.randomUUID(),
+          circleId: input.circleId,
+          userId: input.userId,
+          role: input.role,
+          joinedAt: new Date().toISOString(),
+        },
+      },
+      authToken
+    );
+
+    return result.createCircleMember;
+  }
+
+  async updateCircleMember(
+    id: string,
+    input: { role: 'member' | 'admin' },
+    authToken?: string
+  ): Promise<CircleMember> {
+    const mutation = `
+      mutation UpdateCircleMember($id: ID!, $item: UpdateCircleMemberInput!) {
+        updateCircleMember(id: $id, item: $item) {
+          id
+          circleId
+          userId
+          role
+          joinedAt
+        }
+      }
+    `;
+
+    const result = await this.query<{ updateCircleMember: CircleMember }>(
+      mutation,
+      { id, item: input },
+      authToken
+    );
+
+    return result.updateCircleMember;
+  }
+
+  async deleteCircleMember(id: string, authToken?: string): Promise<void> {
+    const mutation = `
+      mutation DeleteCircleMember($id: ID!) {
+        deleteCircleMember(id: $id) {
+          id
+        }
+      }
+    `;
+
+    await this.query(mutation, { id }, authToken);
+  }
+
+  async getCircleTools(circleId: string, authToken?: string): Promise<Tool[]> {
+    const query = `
+      query GetCircleTools($circleId: ID!) {
+        toolCircles(filter: { circleId: { eq: $circleId } }) {
+          items {
+            id
+            tool {
+              id
+              ownerId
+              name
+              description
+              category
+              brand
+              model
+              status
+              advanceNoticeDays
+              maxLoanDays
+              createdAt
+              owner {
+                id
+                displayName
+                avatarUrl
+              }
+              photos {
+                items {
+                  id
+                  url
+                  isPrimary
+                  uploadedAt
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{
+      toolCircles: { items: Array<{ id: string; tool: Tool & { photos: { items: ToolPhoto[] } } }> };
+    }>(query, { circleId }, authToken);
+
+    // Extract tools and flatten photos
+    return result.toolCircles.items
+      .filter(tc => tc.tool && tc.tool.status !== 'archived')
+      .map(tc => ({
+        ...tc.tool,
+        photos: tc.tool.photos?.items || [],
+      }));
+  }
+
   // ==================== CATEGORIES ====================
 
   getCategories(): string[] {

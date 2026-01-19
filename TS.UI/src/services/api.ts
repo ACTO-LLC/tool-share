@@ -744,5 +744,166 @@ export const userApi = {
   },
 };
 
+// ============================================================================
+// Circle Types
+// ============================================================================
+
+export interface CircleMember {
+  id: string;
+  userId: string;
+  role: 'member' | 'admin' | 'owner';
+  joinedAt: string;
+  user?: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl?: string;
+    reputationScore: number;
+  };
+}
+
+export interface CircleTool {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  brand?: string;
+  model?: string;
+  status: string;
+  owner?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  primaryPhotoUrl?: string;
+}
+
+export interface Circle {
+  id: string;
+  name: string;
+  description?: string;
+  inviteCode: string;
+  isPublic: boolean;
+  createdBy: string;
+  createdAt: string;
+  memberCount?: number;
+  currentUserRole?: 'member' | 'admin' | 'owner';
+}
+
+export interface CircleDetail extends Circle {
+  members?: CircleMember[];
+  tools?: CircleTool[];
+}
+
+export interface CreateCircleRequest {
+  name: string;
+  description?: string;
+  isPublic?: boolean;
+}
+
+export interface JoinCircleRequest {
+  inviteCode: string;
+}
+
+export interface UpdateMemberRoleRequest {
+  role: 'member' | 'admin';
+}
+
+export interface InviteResponse {
+  inviteCode: string;
+  inviteUrl: string;
+}
+
+// ============================================================================
+// Circles API
+// ============================================================================
+
+export const circlesApi = {
+  /**
+   * Get all circles the current user is a member of
+   */
+  async list(): Promise<Circle[]> {
+    return apiRequest<Circle[]>('/api/circles');
+  },
+
+  /**
+   * Get circle details including members and tools
+   */
+  async get(id: string): Promise<CircleDetail> {
+    return apiRequest<CircleDetail>(`/api/circles/${id}`);
+  },
+
+  /**
+   * Create a new circle
+   */
+  async create(data: CreateCircleRequest): Promise<Circle> {
+    return apiRequest<Circle>('/api/circles', {
+      method: 'POST',
+      body: data,
+    });
+  },
+
+  /**
+   * Join a circle using an invite code
+   */
+  async join(inviteCode: string): Promise<Circle> {
+    return apiRequest<Circle>('/api/circles/join', {
+      method: 'POST',
+      body: { inviteCode },
+    });
+  },
+
+  /**
+   * Join a specific circle using an invite code
+   */
+  async joinById(id: string, inviteCode: string): Promise<Circle> {
+    return apiRequest<Circle>(`/api/circles/${id}/join`, {
+      method: 'POST',
+      body: { inviteCode },
+    });
+  },
+
+  /**
+   * Get invite code and URL for a circle (admin only)
+   */
+  async getInvite(id: string): Promise<InviteResponse> {
+    return apiRequest<InviteResponse>(`/api/circles/${id}/invite`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Remove a member from a circle (admin only)
+   */
+  async removeMember(circleId: string, userId: string): Promise<void> {
+    return apiRequest<void>(`/api/circles/${circleId}/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Update a member's role (admin only)
+   */
+  async updateMemberRole(
+    circleId: string,
+    userId: string,
+    role: 'member' | 'admin'
+  ): Promise<CircleMember> {
+    return apiRequest<CircleMember>(`/api/circles/${circleId}/members/${userId}`, {
+      method: 'PUT',
+      body: { role },
+    });
+  },
+
+  /**
+   * Leave a circle
+   */
+  async leave(circleId: string): Promise<void> {
+    return apiRequest<void>(`/api/circles/${circleId}/members/me`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 export { ApiError };
-export default { toolsApi, reservationApi, userApi, notificationApi, reviewsApi };
+export default { toolsApi, reservationApi, userApi, circlesApi, notificationApi, reviewsApi };

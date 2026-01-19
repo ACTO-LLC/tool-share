@@ -27,6 +27,7 @@ class ApiError extends Error {
 
 // MSAL instance reference - set during app initialization
 let msalInstance: PublicClientApplication | null = null;
+let useMockAuth = false;
 
 /**
  * Set the MSAL instance for token acquisition
@@ -34,6 +35,13 @@ let msalInstance: PublicClientApplication | null = null;
  */
 export function setMsalInstance(instance: PublicClientApplication): void {
   msalInstance = instance;
+}
+
+/**
+ * Enable mock authentication mode for local development
+ */
+export function setMockAuth(enabled: boolean): void {
+  useMockAuth = enabled;
 }
 
 /**
@@ -54,6 +62,11 @@ async function getAuthToken(): Promise<string | null> {
   // In E2E test mode, return a mock token
   if (import.meta.env.VITE_E2E_TEST === 'true') {
     return 'mock-e2e-token';
+  }
+
+  // In mock auth mode, return a mock token
+  if (useMockAuth) {
+    return 'mock-dev-token';
   }
 
   if (!msalInstance) {

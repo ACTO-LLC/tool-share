@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useMsal } from '@azure/msal-react';
+import { useAuth } from '../auth';
 import {
   AppBar,
   Box,
@@ -64,9 +64,7 @@ export default function Layout() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { instance, accounts } = useMsal();
-
-  const account = accounts[0];
+  const { logout, user } = useAuth();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -81,7 +79,7 @@ export default function Layout() {
   };
 
   const handleLogout = () => {
-    instance.logoutRedirect();
+    logout();
   };
 
   const handleBottomNavChange = (
@@ -227,10 +225,10 @@ export default function Layout() {
             <>
               <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0, ml: 1 }}>
                 <Avatar
-                  alt={account?.name || 'User'}
+                  alt={user?.name || 'User'}
                   sx={{ width: 36, height: 36 }}
                 >
-                  {account?.name?.charAt(0) || 'U'}
+                  {user?.name?.charAt(0) || 'U'}
                 </Avatar>
               </IconButton>
               <Menu

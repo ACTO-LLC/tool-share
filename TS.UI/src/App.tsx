@@ -1,8 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useIsAuthenticated } from '@azure/msal-react';
 import { Box, CircularProgress } from '@mui/material';
 import Layout from './components/Layout';
+import { useAuth } from './auth';
 
 // Lazy-loaded page components for code splitting
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -39,7 +39,7 @@ function PageLoader() {
 const isE2ETest = import.meta.env.VITE_E2E_TEST === 'true';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useIsAuthenticated();
+  const { isAuthenticated } = useAuth();
 
   // Bypass auth check in E2E test mode
   if (isE2ETest || isAuthenticated) {

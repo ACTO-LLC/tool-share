@@ -1,0 +1,75 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Docker Services",
+      "type": "shell",
+      "command": "docker-compose up -d",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Start UI Dev Server",
+      "type": "npm",
+      "script": "dev",
+      "path": "TS.UI",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE",
+          "endsPattern": "ready in"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "dev"
+      }
+    },
+    {
+      "label": "Start API Dev Server",
+      "type": "npm",
+      "script": "dev",
+      "path": "TS.API",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "ts-node-dev",
+          "endsPattern": "Compilation complete"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "dev"
+      }
+    },
+    {
+      "label": "Start All Dev Services",
+      "dependsOn": ["Start Docker Services", "Start UI Dev Server", "Start API Dev Server"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Stop Docker Services",
+      "type": "shell",
+      "command": "docker-compose down",
+      "problemMatcher": []
+    }
+  ]
+}

@@ -1,13 +1,12 @@
 import { Box, Button, Card, CardContent, Typography, Container } from '@mui/material';
-import { useMsal } from '@azure/msal-react';
-import { loginRequest } from '../config/auth';
 import { Build } from '@mui/icons-material';
+import { useAuth, isMockAuth } from '../auth';
 
 export default function Login() {
-  const { instance } = useMsal();
+  const { login } = useAuth();
 
   const handleLogin = () => {
-    instance.loginRedirect(loginRequest);
+    login();
   };
 
   return (
@@ -35,8 +34,13 @@ export default function Login() {
               onClick={handleLogin}
               fullWidth
             >
-              Sign In
+              {isMockAuth ? 'Sign In (Dev Mode)' : 'Sign In'}
             </Button>
+            {isMockAuth && (
+              <Typography variant="caption" color="warning.main" sx={{ mt: 2, display: 'block' }}>
+                Mock authentication enabled for local development
+              </Typography>
+            )}
             <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
               By signing in, you agree to our Terms of Service and Privacy Policy
             </Typography>

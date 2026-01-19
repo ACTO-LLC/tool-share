@@ -13,8 +13,8 @@ import {
   CircularProgress,
   Skeleton,
 } from '@mui/material';
-import { useMsal } from '@azure/msal-react';
 import { useFormik } from 'formik';
+import { useAuth } from '../auth';
 import * as yup from 'yup';
 import { useCurrentUser, useUpdateProfile } from '../hooks/useUser';
 
@@ -29,8 +29,7 @@ const validationSchema = yup.object({
 });
 
 export default function Profile() {
-  const { accounts } = useMsal();
-  const account = accounts[0];
+  const { user } = useAuth();
 
   // API hooks
   const { data: userProfile, isLoading, error: fetchError } = useCurrentUser();
@@ -84,7 +83,7 @@ export default function Profile() {
   useEffect(() => {
     if (userProfile) {
       formik.setValues({
-        displayName: userProfile.displayName || account?.name || '',
+        displayName: userProfile.displayName || user?.name || '',
         phone: userProfile.phone || '',
         streetAddress: userProfile.streetAddress || '',
         city: userProfile.city || '',
@@ -94,7 +93,7 @@ export default function Profile() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile, account]);
+  }, [userProfile, user]);
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
@@ -143,7 +142,7 @@ export default function Profile() {
     );
   }
 
-  const displayEmail = userProfile?.email || account?.username || '';
+  const displayEmail = userProfile?.email || user?.email || '';
 
   return (
     <Box>
@@ -158,11 +157,11 @@ export default function Profile() {
               src={userProfile?.avatarUrl}
               sx={{ width: 80, height: 80, mr: 3 }}
             >
-              {(userProfile?.displayName || account?.name)?.charAt(0) || 'U'}
+              {(userProfile?.displayName || user?.name)?.charAt(0) || 'U'}
             </Avatar>
             <Box>
               <Typography variant="h6">
-                {userProfile?.displayName || account?.name || 'User'}
+                {userProfile?.displayName || user?.name || 'User'}
               </Typography>
               <Typography color="text.secondary">{displayEmail}</Typography>
               {userProfile?.reputationScore !== undefined && userProfile.reputationScore > 0 && (

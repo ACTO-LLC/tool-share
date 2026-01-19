@@ -16,17 +16,42 @@ interface AuthProviderProps {
 let msalInstance: PublicClientApplication | null = null;
 
 if (!isMockAuth) {
+  console.log('[Auth] Initializing MSAL with config:', {
+    clientId: msalConfig.auth.clientId,
+    authority: msalConfig.auth.authority,
+    redirectUri: window.location.origin,
+  });
+
   msalInstance = new PublicClientApplication(msalConfig);
   setMsalInstance(msalInstance);
 
   // Handle redirect promise for handling authentication responses
   msalInstance.initialize().then(() => {
-    const accounts = msalInstance!.getAllAccounts();
-    if (accounts.length > 0) {
-      msalInstance!.setActiveAccount(accounts[0]);
-    }
+    console.log('[Auth] MSAL initialized, checking for redirect response...');
+    console.log('[Auth] Current URL:', window.location.href);
+    console.log('[Auth] URL hash:', window.location.hash);
+
+    // CRITICAL: Process the redirect response from Entra
+    msalInstance!.handleRedirectPromise().then((response) => {
+      console.log('[Auth] handleRedirectPromise result:', response);
+      if (response) {
+        // User just logged in via redirect
+        console.log('[Auth] Login successful, setting active account:', response.account);
+        msalInstance!.setActiveAccount(response.account);
+      } else {
+        // Check for existing accounts
+        const accounts = msalInstance!.getAllAccounts();
+        console.log('[Auth] No redirect response, existing accounts:', accounts);
+        if (accounts.length > 0) {
+          msalInstance!.setActiveAccount(accounts[0]);
+        }
+      }
+    }).catch((error) => {
+      console.error('[Auth] Error handling redirect:', error);
+    });
 
     msalInstance!.addEventCallback((event: EventMessage) => {
+      console.log('[Auth] MSAL event:', event.eventType, event);
       if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
         const payload = event.payload as AuthenticationResult;
         msalInstance!.setActiveAccount(payload.account);

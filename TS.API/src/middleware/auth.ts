@@ -32,17 +32,33 @@ interface AzureB2CTokenClaims extends JwtPayload {
 // Cache the JWKS client to avoid recreating it on every request
 let jwksClientInstance: jwksClient.JwksClient | null = null;
 
+// Track which JWKS URI is currently in use
+let currentJwksUri: string | null = null;
+
 /**
- * Get or create the JWKS client for Azure AD B2C
+ * Get or create the JWKS client for Azure AD B2C / Entra External ID
  */
 function getJwksClient(): jwksClient.JwksClient {
-  if (!jwksClientInstance) {
-    const tenantName = config.AZURE_AD_B2C_TENANT_ID || 'YOUR_TENANT';
-    const policyName = config.AZURE_AD_B2C_POLICY_NAME || 'B2C_1_signupsignin';
+  const tenantName = config.AZURE_AD_B2C_TENANT_ID || 'YOUR_TENANT';
+  const authDomain = config.AZURE_AD_AUTH_DOMAIN;
+  const policyName = config.AZURE_AD_B2C_POLICY_NAME;
+  const tenantGuid = config.AZURE_AD_TENANT_GUID;
 
-    // Azure AD B2C JWKS URI format
-    const jwksUri = `https://${tenantName}.b2clogin.com/${tenantName}.onmicrosoft.com/${policyName}/discovery/v2.0/keys`;
+  let jwksUri: string;
+  if (authDomain && authDomain.includes('ciamlogin.com') && tenantGuid) {
+    // Entra External ID (CIAM) JWKS URI format - uses tenant GUID as subdomain
+    jwksUri = `https://${tenantGuid}.ciamlogin.com/${tenantGuid}/discovery/v2.0/keys`;
+  } else if (policyName) {
+    // Legacy Azure AD B2C JWKS URI format
+    jwksUri = `https://${tenantName}.b2clogin.com/${tenantName}.onmicrosoft.com/${policyName}/discovery/v2.0/keys`;
+  } else {
+    // Entra External ID without explicit domain
+    jwksUri = `https://${tenantName}.ciamlogin.com/${tenantName}.onmicrosoft.com/discovery/v2.0/keys`;
+  }
 
+  // Recreate client if URI changed or not created yet
+  if (!jwksClientInstance || currentJwksUri !== jwksUri) {
+    currentJwksUri = jwksUri;
     jwksClientInstance = jwksClient({
       jwksUri,
       cache: true,
@@ -62,6 +78,7 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
     const client = getJwksClient();
     client.getSigningKey(header.kid, (err, key) => {
       if (err) {
+        console.error('[Auth] JWKS key fetch error:', err.message);
         reject(err);
         return;
       }
@@ -101,12 +118,32 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
 
   const signingKey = await getSigningKey(decodedHeader.header);
 
-  const issuer = `https://${tenantId}.b2clogin.com/${tenantId}/v2.0/`;
+  // Determine issuer based on auth domain
+  const authDomain = config.AZURE_AD_AUTH_DOMAIN;
+  const tenantGuid = config.AZURE_AD_TENANT_GUID || tenantId;
+  let issuers: string[];
+  if (authDomain && authDomain.includes('ciamlogin.com')) {
+    // Entra External ID issuer format
+    // Note: The issuer uses the tenant GUID as subdomain, not the tenant name
+    issuers = [
+      `https://${tenantGuid}.ciamlogin.com/${tenantGuid}/v2.0`,
+      `https://${tenantGuid}.ciamlogin.com/${tenantGuid}/v2.0/`,
+      // Also accept tenant name format just in case
+      `https://${authDomain}/${tenantGuid}/v2.0`,
+      `https://${authDomain}/${tenantGuid}/v2.0/`,
+    ];
+  } else {
+    // Legacy Azure AD B2C issuer format
+    issuers = [
+      `https://${tenantId}.b2clogin.com/${tenantId}/v2.0/`,
+      `https://${tenantId}.b2clogin.com/${tenantId}/v2.0`,
+    ];
+  }
 
   const verifyOptions: VerifyOptions = {
     algorithms: ['RS256'],
     audience: clientId,
-    issuer: issuer,
+    issuer: issuers,
   };
 
   return new Promise((resolve, reject) => {

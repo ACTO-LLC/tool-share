@@ -29,9 +29,10 @@ services:
       - ./TS.DataAPI/dab-config.json:/App/dab-config.json:ro
     environment:
       - DATABASE_CONNECTION_STRING=Server=sqlserver;Database=ToolShare;User=sa;Password=ToolShare123!;TrustServerCertificate=True;
-      - AZURE_AD_B2C_CLIENT_ID=development
-      - AZURE_AD_B2C_TENANT_NAME=development
-      - AZURE_AD_B2C_TENANT_ID=development
+      - AZURE_AD_B2C_CLIENT_ID=${AZURE_AD_B2C_CLIENT_ID:-82ea9ac5-0639-4493-a8ec-1c6a6bb7b992}
+      - AZURE_AD_B2C_TENANT_NAME=${AZURE_AD_B2C_TENANT_NAME:-toolshare}
+      - AZURE_AD_B2C_TENANT_ID=${AZURE_AD_B2C_TENANT_ID:-toolshare}
+      - AZURE_AD_TENANT_GUID=${AZURE_AD_TENANT_GUID:-bcf802e0-bcbf-4c6b-84df-72538573a5c3}
     depends_on:
       sqlserver:
         condition: service_healthy

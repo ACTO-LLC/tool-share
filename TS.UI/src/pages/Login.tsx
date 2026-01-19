@@ -1,9 +1,20 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Box, Button, Card, CardContent, Typography, Container } from '@mui/material';
 import { Build } from '@mui/icons-material';
 import { useAuth, isMockAuth } from '../auth';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('[Login] User is authenticated, redirecting to dashboard...');
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = () => {
     login();

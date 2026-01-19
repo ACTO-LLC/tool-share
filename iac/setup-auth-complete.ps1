@@ -127,8 +127,15 @@ $spaApp = az ad app create `
 $spaClientId = $spaApp.appId
 Write-Host "  SPA Client ID: $spaClientId" -ForegroundColor Green
 
-# Configure SPA redirect URIs
-$redirectUris = @("http://localhost:5173", "http://localhost:5173/auth/callback")
+# Configure SPA redirect URIs (multiple localhost ports for dev flexibility)
+$redirectUris = @(
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5173/auth/callback",
+    "http://localhost:5174/auth/callback",
+    "http://localhost:5175/auth/callback"
+)
 if ($Environment -eq "uat") {
     $redirectUris += @("https://app-toolshare-ui-uat.azurewebsites.net", "https://app-toolshare-ui-uat.azurewebsites.net/auth/callback")
 } elseif ($Environment -eq "prod") {
@@ -155,11 +162,78 @@ $apiApp = az ad app create `
 $apiClientId = $apiApp.appId
 Write-Host "  API Client ID: $apiClientId" -ForegroundColor Green
 
+# Set App ID URI on API app
+Write-Host "  Setting App ID URI..." -ForegroundColor Gray
+az rest --method PATCH `
+    --url "https://graph.microsoft.com/v1.0/applications(appId='$apiClientId')" `
+    --body "{`"identifierUris`":[`"api://$apiClientId`"]}" `
+    --headers "Content-Type=application/json" | Out-Null
+
+# Create API scope (access_as_user)
+Write-Host "  Creating API scope..." -ForegroundColor Gray
+$scopeId = [guid]::NewGuid().ToString()
+$scopeBody = @{
+    api = @{
+        oauth2PermissionScopes = @(
+            @{
+                adminConsentDescription = "Allow the application to access ToolShare API on behalf of the signed-in user."
+                adminConsentDisplayName = "Access ToolShare API"
+                id = $scopeId
+                isEnabled = $true
+                type = "User"
+                userConsentDescription = "Allow the application to access ToolShare API on your behalf."
+                userConsentDisplayName = "Access ToolShare API"
+                value = "access_as_user"
+            }
+        )
+    }
+} | ConvertTo-Json -Depth 10 -Compress
+
+$tempScopeFile = [System.IO.Path]::GetTempFileName()
+$scopeBody | Out-File -FilePath $tempScopeFile -Encoding utf8 -NoNewline
+
+az rest --method PATCH `
+    --url "https://graph.microsoft.com/v1.0/applications(appId='$apiClientId')" `
+    --body "@$tempScopeFile" `
+    --headers "Content-Type=application/json" | Out-Null
+
+Remove-Item $tempScopeFile -ErrorAction SilentlyContinue
+Write-Host "  API scope created: access_as_user" -ForegroundColor Green
+
+# Create service principal for API (required for it to be recognized as a resource)
+Write-Host "Creating service principal for API..." -ForegroundColor Gray
+$apiSpResult = az ad sp create --id $apiClientId 2>$null | ConvertFrom-Json
+Write-Host "  API Service Principal ID: $($apiSpResult.id)" -ForegroundColor Green
+
 # Create service principal for SPA
 Write-Host "Creating service principal for SPA..." -ForegroundColor Gray
 $spResult = az ad sp create --id $spaClientId 2>$null | ConvertFrom-Json
 $spObjectId = $spResult.id
-Write-Host "  Service Principal ID: $spObjectId" -ForegroundColor Green
+Write-Host "  SPA Service Principal ID: $spObjectId" -ForegroundColor Green
+
+# Pre-authorize SPA to call API (avoids consent prompt)
+Write-Host "  Pre-authorizing SPA to call API..." -ForegroundColor Gray
+$preauthBody = @{
+    api = @{
+        preAuthorizedApplications = @(
+            @{
+                appId = $spaClientId
+                delegatedPermissionIds = @($scopeId)
+            }
+        )
+    }
+} | ConvertTo-Json -Depth 10 -Compress
+
+$tempPreauthFile = [System.IO.Path]::GetTempFileName()
+$preauthBody | Out-File -FilePath $tempPreauthFile -Encoding utf8 -NoNewline
+
+az rest --method PATCH `
+    --url "https://graph.microsoft.com/v1.0/applications(appId='$apiClientId')" `
+    --body "@$tempPreauthFile" `
+    --headers "Content-Type=application/json" | Out-Null
+
+Remove-Item $tempPreauthFile -ErrorAction SilentlyContinue
+Write-Host "  SPA pre-authorized to call API" -ForegroundColor Green
 
 Write-Host ""
 

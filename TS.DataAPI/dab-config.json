@@ -23,7 +23,7 @@
         "provider": "AzureAD",
         "jwt": {
           "audience": "@env('AZURE_AD_B2C_CLIENT_ID')",
-          "issuer": "https://@env('AZURE_AD_B2C_TENANT_NAME').b2clogin.com/@env('AZURE_AD_B2C_TENANT_ID')/v2.0/"
+          "issuer": "https://@env('AZURE_AD_TENANT_GUID').ciamlogin.com/@env('AZURE_AD_TENANT_GUID')/v2.0"
         }
       }
     }

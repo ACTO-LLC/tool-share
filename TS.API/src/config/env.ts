@@ -7,10 +7,13 @@ export const config = cleanEnv(process.env, {
   NODE_ENV: str({ choices: ['development', 'test', 'production'], default: 'development' }),
   PORT: port({ default: 3000 }),
 
-  // Azure AD B2C
+  // Azure AD B2C / Entra External ID
   AZURE_AD_B2C_TENANT_ID: str({ default: '' }),
   AZURE_AD_B2C_CLIENT_ID: str({ default: '' }),
-  AZURE_AD_B2C_POLICY_NAME: str({ default: 'B2C_1_signupsignin' }),
+  AZURE_AD_B2C_POLICY_NAME: str({ default: '' }),
+  // Entra External ID specific (ciamlogin.com)
+  AZURE_AD_AUTH_DOMAIN: str({ default: '' }),
+  AZURE_AD_TENANT_GUID: str({ default: '' }),
 
   // Database (DAB)
   DAB_GRAPHQL_URL: url({ default: 'http://localhost:5000/graphql' }),

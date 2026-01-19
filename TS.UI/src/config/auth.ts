@@ -10,8 +10,8 @@ export const msalConfig: Configuration = {
     // For legacy B2C, use: https://TENANT.b2clogin.com/TENANT.onmicrosoft.com/B2C_1_signupsignin
     authority: import.meta.env.VITE_AZURE_AD_B2C_AUTHORITY || 'https://YOUR_TENANT.ciamlogin.com/YOUR_TENANT.onmicrosoft.com',
     knownAuthorities: [import.meta.env.VITE_AZURE_AD_B2C_KNOWN_AUTHORITY || 'YOUR_TENANT.ciamlogin.com'],
-    redirectUri: import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173',
-    postLogoutRedirectUri: import.meta.env.VITE_REDIRECT_URI || 'http://localhost:5173',
+    redirectUri: window.location.origin,
+    postLogoutRedirectUri: window.location.origin,
   },
   cache: {
     cacheLocation: 'sessionStorage',

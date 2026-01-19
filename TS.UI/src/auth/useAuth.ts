@@ -34,13 +34,16 @@ function useMsalSafe() {
   }
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { instance, accounts } = useMsal();
+  const { instance, accounts, inProgress } = useMsal();
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const isAuthenticated = useIsAuthenticated();
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const account = useAccount(accounts[0] || {});
 
+  console.log('[useAuth] MSAL state:', { isAuthenticated, accounts, inProgress, activeAccount: instance.getActiveAccount() });
+
   const login = () => {
+    console.log('[useAuth] Starting login redirect...');
     instance.loginRedirect(loginRequest);
   };
 

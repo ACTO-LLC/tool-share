@@ -11,59 +11,82 @@ This playbook documents operational procedures for developing the Tool Share app
 
 ---
 
-## Parallel Agent Development
+## Parallel Agent Development with Git Worktrees
 
 ### Overview
 
-We use 3 AI agents working concurrently on vertical feature slices:
+We use 3 AI agents working **truly concurrently** on vertical feature slices. To achieve true parallelism, each agent must work in its own **git worktree** (separate directory).
 
-| Agent | Slice | Scope |
-|-------|-------|-------|
-| Agent 1 | User & Auth | Authentication, profiles, circles |
-| Agent 2 | Tools & Search | Tool CRUD, photos, search, browsing |
-| Agent 3 | Reservations | Booking, loan lifecycle, dashboard |
+| Agent | Slice | Worktree Path | Branch |
+|-------|-------|---------------|--------|
+| Agent 1 | User & Auth | `../tool-share-slice-1` | `feature/slice-1-auth` |
+| Agent 2 | Tools & Search | `../tool-share-slice-2` | `feature/slice-2-tools` |
+| Agent 3 | Reservations | `../tool-share-slice-3` | `feature/slice-3-reservations` |
 
 See [ADR-010](./architecture/adrs/ADR-010-feature-slice-development.md) for the full rationale.
+
+### Why Worktrees Are Required
+
+Without worktrees, all agents share the same working directory:
+- `git checkout` overwrites the entire directory
+- Agents cannot write files concurrently
+- Work is effectively serialized, not parallelized
+- Risk of agents overwriting each other's changes
 
 ### Pre-Launch Checklist
 
 Before launching parallel agents:
 
-- [ ] **Create feature branches** for each slice
+- [ ] **Create git worktrees** for each slice (not just branches!)
 - [ ] **Push branches to remote** so agents can work independently
-- [ ] **Verify master is clean** - no uncommitted changes
+- [ ] **Install dependencies** in each worktree
+- [ ] **Verify worktree paths** are correct
 - [ ] **Document the current state** - what's already implemented
 
 ```bash
-# Setup script for parallel agent work
+# Setup script for parallel agent work with worktrees
+cd C:/source/tool-share
 git checkout master && git pull origin master
 
-# Create and push slice branches
-for slice in slice-1-auth slice-2-tools slice-3-reservations; do
-  git checkout master
-  git checkout -b feature/$slice
-  git push -u origin feature/$slice
-done
+# Create worktrees (creates both directory and branch)
+git worktree add ../tool-share-slice-1 -b feature/slice-1-auth-phase4
+git worktree add ../tool-share-slice-2 -b feature/slice-2-tools-phase4
+git worktree add ../tool-share-slice-3 -b feature/slice-3-reservations-phase4
 
-git checkout master
+# Push branches to remote
+git push -u origin feature/slice-1-auth-phase4
+git push -u origin feature/slice-2-tools-phase4
+git push -u origin feature/slice-3-reservations-phase4
+
+# Install dependencies in each worktree
+cd ../tool-share-slice-1/TS.UI && npm install
+cd ../tool-share-slice-1/TS.API && npm install
+# ... repeat for slice-2 and slice-3
+
+# Verify setup
+git worktree list
 ```
 
-### Agent Launch Template
+### Agent Launch Template (Worktree Version)
 
-When launching an agent, ALWAYS include branch instructions:
+When launching an agent, specify the worktree path:
 
 ```markdown
-## Git Instructions (MANDATORY)
-Before making ANY code changes:
-1. Switch to your branch: `git checkout feature/slice-X-name`
-2. Verify branch: `git branch --show-current` (must show feature/slice-X-name)
-3. Pull latest: `git pull origin feature/slice-X-name`
+## Working Directory (MANDATORY)
+You are working in: `C:/source/tool-share-slice-X`
+This is a git worktree already on branch: `feature/slice-X-name-phaseN`
+
+Before making changes:
+1. Verify location: `pwd` (must show C:/source/tool-share-slice-X)
+2. Verify branch: `git branch --show-current`
 
 After completing work:
 1. Stage changes: `git add -A`
 2. Commit: `git commit -m "feat(slice-X): description"`
-3. Push: `git push origin feature/slice-X-name`
+3. Push: `git push origin feature/slice-X-name-phaseN`
 
+NEVER change to other worktree directories.
+NEVER switch branches—you're already on the correct branch.
 NEVER commit directly to master.
 ```
 
@@ -71,42 +94,57 @@ NEVER commit directly to master.
 
 After all agents complete:
 
-1. **Review each branch**
+1. **Review each branch** (from main repo or any worktree)
    ```bash
-   git log master..feature/slice-1-auth --oneline
-   git diff master..feature/slice-1-auth --stat
+   cd C:/source/tool-share  # Main repo
+   git fetch --all
+   git log master..feature/slice-1-auth-phaseN --oneline
+   git diff master..feature/slice-1-auth-phaseN --stat
    ```
 
 2. **Create Pull Requests**
    ```bash
-   gh pr create --base master --head feature/slice-1-auth --title "feat: Slice 1 - User & Auth"
-   gh pr create --base master --head feature/slice-2-tools --title "feat: Slice 2 - Tools & Search"
-   gh pr create --base master --head feature/slice-3-reservations --title "feat: Slice 3 - Reservations"
+   gh pr create --base master --head feature/slice-1-auth-phaseN --title "feat: Slice 1 - User & Auth"
+   gh pr create --base master --head feature/slice-2-tools-phaseN --title "feat: Slice 2 - Tools & Search"
+   gh pr create --base master --head feature/slice-3-reservations-phaseN --title "feat: Slice 3 - Reservations"
    ```
 
 3. **Merge in dependency order**
    - Slice 1 first (provides auth middleware others depend on)
-   - Slice 2 second
-   - Slice 3 third
+   - Slice 2 second (may need to pull master after Slice 1 merges)
+   - Slice 3 third (may need to pull master after Slice 2 merges)
 
-4. **Clean up branches**
+4. **Clean up worktrees and branches**
    ```bash
-   git branch -d feature/slice-1-auth feature/slice-2-tools feature/slice-3-reservations
-   git push origin --delete feature/slice-1-auth feature/slice-2-tools feature/slice-3-reservations
+   cd C:/source/tool-share  # Return to main repo
+
+   # Remove worktrees first
+   git worktree remove ../tool-share-slice-1
+   git worktree remove ../tool-share-slice-2
+   git worktree remove ../tool-share-slice-3
+
+   # Delete remote branches
+   git push origin --delete feature/slice-1-auth-phaseN
+   git push origin --delete feature/slice-2-tools-phaseN
+   git push origin --delete feature/slice-3-reservations-phaseN
+
+   # Delete local branch references
+   git branch -d feature/slice-1-auth-phaseN feature/slice-2-tools-phaseN feature/slice-3-reservations-phaseN
    ```
 
 ### Troubleshooting
 
-#### Agents worked on same branch
-If agents accidentally worked on the same branch:
-1. Review `git log` to see interleaved commits
-2. Use `git cherry-pick` to extract commits to correct branches
-3. Or: consolidate as single "Phase X" commit if changes are compatible
+#### Agents worked in same directory (without worktrees)
+If agents ran in the same directory without worktrees:
+1. Work was likely serialized (not parallel)
+2. Check `git log` to see if commits are sequential
+3. For future work: Always use worktrees for true parallelism
 
 #### Merge conflicts between slices
 1. Identify conflicting files: `git diff feature/slice-1-auth..feature/slice-2-tools`
-2. Resolve in the later slice's PR
-3. Common conflicts: `App.tsx` routes, `package.json` dependencies
+2. In later slice's worktree, merge master: `git fetch origin && git merge origin/master`
+3. Resolve conflicts, commit, push
+4. Common conflicts: `App.tsx` routes, `package.json` dependencies, `api.ts` exports
 
 ---
 
@@ -236,7 +274,7 @@ Required for local development:
 
 ## Lessons Learned
 
-### 2026-01-18: Parallel Agent Branch Isolation
+### 2026-01-18: Phase 1 - Agents on Same Branch
 
 **Problem:** Launched 3 agents to work on slices without creating separate branches. All agents modified files on master simultaneously.
 
@@ -245,6 +283,25 @@ Required for local development:
 **Solution:** Always create and push feature branches BEFORE launching agents. Include explicit branch checkout instructions in every agent prompt.
 
 **Prevention:** Added to this playbook and ADR-010.
+
+### 2026-01-18: Phases 2-3 - Branches Without Worktrees
+
+**Problem:** Created separate branches but had all agents working in the same directory. Agents were instructed to `git checkout` to their branch, but this overwrites the working directory.
+
+**Impact:** Agents could not truly run in parallel. Each branch checkout wiped out the previous agent's in-progress work. Development was effectively serial, not parallel.
+
+**Root Cause:** Misunderstanding of git's working directory model. A git repository can only have one branch checked out at a time in a single working directory.
+
+**Solution:** Use **git worktrees** to create separate directories for each branch:
+```bash
+git worktree add ../project-slice-1 -b feature/slice-1
+git worktree add ../project-slice-2 -b feature/slice-2
+git worktree add ../project-slice-3 -b feature/slice-3
+```
+
+**Key Insight:** Worktrees give each agent its own isolated directory. Each worktree has the complete repository with its branch already checked out. Agents work in parallel without any file conflicts.
+
+**Prevention:** Updated this playbook and ADR-010 with mandatory worktree setup. Updated strategy-planning playbook for all future projects.
 
 ---
 

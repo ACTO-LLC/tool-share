@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks/useUser';
 import {
   AppBar,
   Box,
@@ -64,7 +65,18 @@ export default function Layout() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, user } = useAuth();
+  const { logout, user, isAuthenticated } = useAuth();
+
+  // Fetch/create user profile when authenticated
+  // This ensures the user exists in the database on first login
+  const { error: userError } = useCurrentUser({ enabled: isAuthenticated });
+
+  // Log user sync errors (but don't block the UI)
+  useEffect(() => {
+    if (userError) {
+      console.error('[Layout] Failed to sync user profile:', userError);
+    }
+  }, [userError]);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);

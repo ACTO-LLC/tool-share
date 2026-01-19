@@ -30,6 +30,7 @@ import {
   Person as PersonIcon,
   Logout as LogoutIcon,
 } from '@mui/icons-material';
+import NotificationBell from './NotificationBell';
 
 const drawerWidth = 240;
 
@@ -116,7 +117,8 @@ export default function Layout() {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {navItems.find((item) => item.path === location.pathname)?.text || 'Tool Share'}
           </Typography>
-          <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0 }}>
+          <NotificationBell />
+          <IconButton onClick={handleProfileMenuOpen} sx={{ p: 0, ml: 1 }}>
             <Avatar alt={account?.name || 'User'}>
               {account?.name?.charAt(0) || 'U'}
             </Avatar>

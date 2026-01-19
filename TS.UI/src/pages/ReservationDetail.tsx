@@ -37,16 +37,19 @@ import {
   Person,
   CalendarMonth,
   Notes,
-  PhotoCamera,
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import {
   reservationApi,
   Reservation,
   ReservationStatus,
+  LoanPhoto,
+  Review,
   ApiError,
 } from '../services/api';
 import { mockReservations, mockCurrentUser } from '../data/mockData';
+import LoanPhotoSection from '../components/LoanPhotoSection';
+import ReviewSection from '../components/ReviewSection';
 
 // Check if we should use real API
 const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
@@ -142,6 +145,11 @@ export default function ReservationDetail() {
   }>({ open: false, action: null });
   const [actionNote, setActionNote] = useState('');
 
+  // Photo and review state
+  const [beforePhotos, setBeforePhotos] = useState<LoanPhoto[]>([]);
+  const [afterPhotos, setAfterPhotos] = useState<LoanPhoto[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+
   // Determine user's role in this reservation
   const isOwner = reservation?.tool?.ownerId === mockCurrentUser.id;
   const isBorrower = reservation?.borrowerId === mockCurrentUser.id;
@@ -156,11 +164,31 @@ export default function ReservationDetail() {
       if (USE_REAL_API) {
         const data = await reservationApi.get(id);
         setReservation(data);
+
+        // Load photos and reviews
+        try {
+          const photos = await reservationApi.getPhotos(id);
+          setBeforePhotos(photos.filter(p => p.type === 'before'));
+          setAfterPhotos(photos.filter(p => p.type === 'after'));
+        } catch {
+          console.log('Photos not available yet');
+        }
+
+        try {
+          const reviewsData = await reservationApi.getReviews(id);
+          setReviews(reviewsData);
+        } catch {
+          console.log('Reviews not available yet');
+        }
       } else {
         // Use mock data
         const mockReservation = mockReservations.find((r) => r.id === id);
         if (mockReservation) {
           setReservation(mockReservation);
+          // Mock photos and reviews
+          setBeforePhotos([]);
+          setAfterPhotos([]);
+          setReviews([]);
         } else {
           setError('Reservation not found');
         }
@@ -494,64 +522,45 @@ export default function ReservationDetail() {
             </Card>
           )}
 
-          {/* Before/After Photos (placeholder) */}
-          {reservation.status === 'active' || reservation.status === 'completed' ? (
+          {/* Before/After Photos */}
+          {['confirmed', 'active', 'completed'].includes(reservation.status) && (
             <Card sx={{ mb: 3 }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PhotoCamera /> Condition Photos
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        Before (Pickup)
-                      </Typography>
-                      <Box
-                        sx={{
-                          height: 120,
-                          bgcolor: 'grey.100',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Button startIcon={<PhotoCamera />} size="small">
-                          Upload Photos
-                        </Button>
-                      </Box>
-                    </Paper>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Paper variant="outlined" sx={{ p: 2 }}>
-                      <Typography variant="subtitle2" gutterBottom>
-                        After (Return)
-                      </Typography>
-                      <Box
-                        sx={{
-                          height: 120,
-                          bgcolor: 'grey.100',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Button
-                          startIcon={<PhotoCamera />}
-                          size="small"
-                          disabled={reservation.status !== 'active'}
-                        >
-                          Upload Photos
-                        </Button>
-                      </Box>
-                    </Paper>
-                  </Grid>
-                </Grid>
+                <LoanPhotoSection
+                  reservationId={reservation.id}
+                  reservationStatus={reservation.status}
+                  isBorrower={isBorrower}
+                  isOwner={isOwner}
+                  beforePhotos={beforePhotos}
+                  afterPhotos={afterPhotos}
+                  onPhotosUpdated={loadReservation}
+                />
               </CardContent>
             </Card>
-          ) : null}
+          )}
+
+          {/* Reviews Section */}
+          {reservation.status === 'completed' && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <ReviewSection
+                  reservationId={reservation.id}
+                  reservationStatus={reservation.status}
+                  currentUserId={mockCurrentUser.id}
+                  isBorrower={isBorrower}
+                  isOwner={isOwner}
+                  otherPartyId={isBorrower ? (reservation.tool?.ownerId || '') : reservation.borrowerId}
+                  otherPartyName={
+                    isBorrower
+                      ? (reservation.tool?.owner?.displayName || 'the owner')
+                      : (reservation.borrower?.displayName || 'the borrower')
+                  }
+                  existingReviews={reviews}
+                  onReviewSubmitted={loadReservation}
+                />
+              </CardContent>
+            </Card>
+          )}
         </Grid>
 
         {/* Sidebar */}
@@ -640,24 +649,40 @@ export default function ReservationDetail() {
 
                 {/* Borrower actions */}
                 {isBorrower && reservation.status === 'confirmed' && (
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    onClick={() => handleAction('pickup')}
-                  >
-                    Confirm Pickup
-                  </Button>
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      fullWidth
+                      onClick={() => handleAction('pickup')}
+                      disabled={beforePhotos.length === 0}
+                    >
+                      Confirm Pickup
+                    </Button>
+                    {beforePhotos.length === 0 && (
+                      <Typography variant="caption" color="warning.main" sx={{ textAlign: 'center' }}>
+                        Upload at least 1 before photo first
+                      </Typography>
+                    )}
+                  </>
                 )}
                 {isBorrower && reservation.status === 'active' && (
-                  <Button
-                    variant="contained"
-                    color="success"
-                    fullWidth
-                    onClick={() => handleAction('return')}
-                  >
-                    Confirm Return
-                  </Button>
+                  <>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      fullWidth
+                      onClick={() => handleAction('return')}
+                      disabled={afterPhotos.length === 0}
+                    >
+                      Confirm Return
+                    </Button>
+                    {afterPhotos.length === 0 && (
+                      <Typography variant="caption" color="warning.main" sx={{ textAlign: 'center' }}>
+                        Upload at least 1 after photo first
+                      </Typography>
+                    )}
+                  </>
                 )}
 
                 {/* Cancel - available for both when pending/confirmed */}

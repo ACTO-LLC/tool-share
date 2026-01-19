@@ -11,10 +11,14 @@ import {
   Request,
   SuccessResponse,
   Response,
+  UploadedFile,
+  FormField,
 } from 'tsoa';
 import { Request as ExpressRequest } from 'express';
 import { AuthenticatedUser } from '../middleware/auth';
 import * as dabService from '../services/dabService';
+import * as notificationService from '../services/notificationService';
+import { blobStorageService } from '../services/blobStorageService';
 
 // Request/Response interfaces
 interface CreateReservationRequest {
@@ -90,6 +94,64 @@ interface DashboardStatsResponse {
 interface ReservationErrorResponse {
   message: string;
   code?: string;
+}
+
+// Loan Photo interfaces
+interface LoanPhotoResponse {
+  id: string;
+  reservationId: string;
+  type: 'before' | 'after';
+  url: string;
+  uploadedBy: string;
+  notes?: string;
+  uploadedAt: string;
+}
+
+// Review interfaces
+interface CreateReviewRequest {
+  rating: number;
+  comment?: string;
+}
+
+interface ReviewResponse {
+  id: string;
+  reservationId: string;
+  reviewerId: string;
+  revieweeId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  reviewer?: ReviewUserInfo;
+  reviewee?: ReviewUserInfo;
+}
+
+interface ReviewUserInfo {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+interface UserReviewsResponse {
+  reviews: ReviewResponse[];
+  averageRating: number;
+  totalReviews: number;
+}
+
+// Notification interfaces
+interface NotificationResponse {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  relatedId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+interface NotificationListResponse {
+  items: NotificationResponse[];
+  unreadCount: number;
 }
 
 @Route('api/reservations')
@@ -197,6 +259,19 @@ export class ReservationsController extends Controller {
       },
       authToken
     );
+
+    // Send notification to tool owner
+    if (tool.owner) {
+      await notificationService.notifyReservationRequest(
+        tool.ownerId,
+        dbUser.displayName,
+        tool.name,
+        reservation.id,
+        body.startDate,
+        body.endDate,
+        authToken
+      );
+    }
 
     this.setStatus(201);
     return reservation as ReservationResponse;
@@ -353,6 +428,18 @@ export class ReservationsController extends Controller {
       authToken
     );
 
+    // Send notification to borrower
+    if (reservation.borrower && reservation.tool?.owner) {
+      await notificationService.notifyReservationApproved(
+        reservation.borrowerId,
+        reservation.tool.owner.displayName,
+        reservation.tool.name,
+        id,
+        reservation.startDate,
+        authToken
+      );
+    }
+
     return updated as ReservationResponse;
   }
 
@@ -398,6 +485,18 @@ export class ReservationsController extends Controller {
       },
       authToken
     );
+
+    // Send notification to borrower
+    if (reservation.borrower && reservation.tool?.owner) {
+      await notificationService.notifyReservationDeclined(
+        reservation.borrowerId,
+        reservation.tool.owner.displayName,
+        reservation.tool.name,
+        id,
+        body.reason,
+        authToken
+      );
+    }
 
     return updated as ReservationResponse;
   }
@@ -460,11 +559,11 @@ export class ReservationsController extends Controller {
 
   /**
    * Confirm tool pickup
-   * @summary Confirm pickup (borrower only)
+   * @summary Confirm pickup (borrower only) - requires at least 1 before photo
    */
   @Post('/{id}/pickup')
   @Security('Bearer')
-  @Response<ReservationErrorResponse>(400, 'Reservation is not in confirmed status')
+  @Response<ReservationErrorResponse>(400, 'Reservation is not in confirmed status or missing before photo')
   @Response<ReservationErrorResponse>(403, 'Only the borrower can confirm pickup')
   @Response<ReservationErrorResponse>(404, 'Reservation not found')
   public async confirmPickup(
@@ -492,6 +591,13 @@ export class ReservationsController extends Controller {
       throw new Error(`Cannot confirm pickup for a reservation with status "${reservation.status}".`);
     }
 
+    // Check for at least one before photo
+    const beforePhotos = await dabService.getLoanPhotosByType(id, 'before', authToken);
+    if (beforePhotos.length === 0) {
+      this.setStatus(400);
+      throw new Error('At least one "before" photo is required to confirm pickup.');
+    }
+
     const updated = await dabService.updateReservation(
       id,
       {
@@ -502,16 +608,27 @@ export class ReservationsController extends Controller {
       authToken
     );
 
+    // Send notification to owner that loan has started
+    if (reservation.tool?.owner && reservation.borrower) {
+      await notificationService.notifyLoanStarted(
+        reservation.tool.ownerId,
+        reservation.borrower.displayName,
+        reservation.tool.name,
+        id,
+        authToken
+      );
+    }
+
     return updated as ReservationResponse;
   }
 
   /**
    * Confirm tool return
-   * @summary Confirm return (borrower only)
+   * @summary Confirm return (borrower only) - requires at least 1 after photo
    */
   @Post('/{id}/return')
   @Security('Bearer')
-  @Response<ReservationErrorResponse>(400, 'Reservation is not in active status')
+  @Response<ReservationErrorResponse>(400, 'Reservation is not in active status or missing after photo')
   @Response<ReservationErrorResponse>(403, 'Only the borrower can confirm return')
   @Response<ReservationErrorResponse>(404, 'Reservation not found')
   public async confirmReturn(
@@ -539,6 +656,13 @@ export class ReservationsController extends Controller {
       throw new Error(`Cannot confirm return for a reservation with status "${reservation.status}".`);
     }
 
+    // Check for at least one after photo
+    const afterPhotos = await dabService.getLoanPhotosByType(id, 'after', authToken);
+    if (afterPhotos.length === 0) {
+      this.setStatus(400);
+      throw new Error('At least one "after" photo is required to confirm return.');
+    }
+
     const updated = await dabService.updateReservation(
       id,
       {
@@ -548,6 +672,17 @@ export class ReservationsController extends Controller {
       },
       authToken
     );
+
+    // Send notification to owner that loan has completed
+    if (reservation.tool?.owner && reservation.borrower) {
+      await notificationService.notifyLoanCompleted(
+        reservation.tool.ownerId,
+        reservation.borrower.displayName,
+        reservation.tool.name,
+        id,
+        authToken
+      );
+    }
 
     return updated as ReservationResponse;
   }
@@ -574,5 +709,417 @@ export class ReservationsController extends Controller {
     }
 
     return dabService.getDashboardStats(dbUser.id, authToken);
+  }
+
+  // ============================================================================
+  // Loan Photo Endpoints
+  // ============================================================================
+
+  /**
+   * Upload a loan photo (before or after)
+   * @summary Upload condition photo for a reservation
+   */
+  @Post('/{id}/photos')
+  @Security('Bearer')
+  @SuccessResponse(201, 'Created')
+  @Response<ReservationErrorResponse>(400, 'Bad Request - Invalid photo type')
+  @Response<ReservationErrorResponse>(403, 'Not authorized to upload photos for this reservation')
+  @Response<ReservationErrorResponse>(404, 'Reservation not found')
+  public async uploadLoanPhoto(
+    @Request() request: ExpressRequest,
+    @Path() id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @FormField() type: 'before' | 'after',
+    @FormField() notes?: string
+  ): Promise<LoanPhotoResponse> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    // Validate photo type
+    if (!['before', 'after'].includes(type)) {
+      this.setStatus(400);
+      throw new Error('Photo type must be "before" or "after".');
+    }
+
+    // Get the reservation
+    const reservation = await dabService.getReservationById(id, authToken);
+    if (!reservation) {
+      this.setStatus(404);
+      throw new Error('Reservation not found.');
+    }
+
+    // Get the current user
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      this.setStatus(403);
+      throw new Error('User not found.');
+    }
+
+    // Only borrower or owner can upload photos
+    const isBorrower = reservation.borrowerId === dbUser.id;
+    const isOwner = reservation.tool?.ownerId === dbUser.id;
+
+    if (!isBorrower && !isOwner) {
+      this.setStatus(403);
+      throw new Error('Only the borrower or tool owner can upload photos.');
+    }
+
+    // Validate based on reservation status and photo type
+    if (type === 'before') {
+      if (!['confirmed', 'active'].includes(reservation.status)) {
+        this.setStatus(400);
+        throw new Error('Before photos can only be uploaded for confirmed or active reservations.');
+      }
+    } else if (type === 'after') {
+      if (reservation.status !== 'active') {
+        this.setStatus(400);
+        throw new Error('After photos can only be uploaded for active reservations.');
+      }
+    }
+
+    // Upload file to blob storage
+    const uploadResult = await blobStorageService.uploadFile(
+      file.buffer,
+      file.originalname,
+      `loans/${id}/${type}`,
+      file.mimetype
+    );
+
+    // Generate SAS URL for access
+    const sasUrl = blobStorageService.generateSasUrl(uploadResult.blobName, 60 * 24 * 365); // 1 year expiry
+
+    // Create loan photo record
+    const loanPhoto = await dabService.createLoanPhoto(
+      {
+        reservationId: id,
+        type,
+        url: sasUrl.url,
+        uploadedBy: dbUser.id,
+        notes,
+      },
+      authToken
+    );
+
+    this.setStatus(201);
+    return loanPhoto as LoanPhotoResponse;
+  }
+
+  /**
+   * Get loan photos for a reservation
+   * @summary Get condition photos for a reservation
+   */
+  @Get('/{id}/photos')
+  @Security('Bearer')
+  @Response<ReservationErrorResponse>(403, 'Not authorized to view this reservation')
+  @Response<ReservationErrorResponse>(404, 'Reservation not found')
+  public async getLoanPhotos(
+    @Request() request: ExpressRequest,
+    @Path() id: string,
+    @Query() type?: 'before' | 'after'
+  ): Promise<LoanPhotoResponse[]> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    const reservation = await dabService.getReservationById(id, authToken);
+    if (!reservation) {
+      this.setStatus(404);
+      throw new Error('Reservation not found.');
+    }
+
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      this.setStatus(403);
+      throw new Error('Not authorized to view this reservation.');
+    }
+
+    const isBorrower = reservation.borrowerId === dbUser.id;
+    const isOwner = reservation.tool?.ownerId === dbUser.id;
+
+    if (!isBorrower && !isOwner) {
+      this.setStatus(403);
+      throw new Error('Not authorized to view this reservation.');
+    }
+
+    if (type) {
+      return dabService.getLoanPhotosByType(id, type, authToken) as Promise<LoanPhotoResponse[]>;
+    }
+
+    return dabService.getLoanPhotos(id, authToken) as Promise<LoanPhotoResponse[]>;
+  }
+
+  // ============================================================================
+  // Review Endpoints
+  // ============================================================================
+
+  /**
+   * Submit a review for a completed reservation
+   * @summary Leave a review after completing a reservation
+   */
+  @Post('/{id}/review')
+  @Security('Bearer')
+  @SuccessResponse(201, 'Created')
+  @Response<ReservationErrorResponse>(400, 'Bad Request - Reservation not completed or review already exists')
+  @Response<ReservationErrorResponse>(403, 'Not authorized to review this reservation')
+  @Response<ReservationErrorResponse>(404, 'Reservation not found')
+  public async createReview(
+    @Request() request: ExpressRequest,
+    @Path() id: string,
+    @Body() body: CreateReviewRequest
+  ): Promise<ReviewResponse> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    // Validate rating
+    if (body.rating < 1 || body.rating > 5 || !Number.isInteger(body.rating)) {
+      this.setStatus(400);
+      throw new Error('Rating must be an integer between 1 and 5.');
+    }
+
+    // Get the reservation
+    const reservation = await dabService.getReservationById(id, authToken);
+    if (!reservation) {
+      this.setStatus(404);
+      throw new Error('Reservation not found.');
+    }
+
+    // Get the current user
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      this.setStatus(403);
+      throw new Error('User not found.');
+    }
+
+    // Check if user is part of this reservation
+    const isBorrower = reservation.borrowerId === dbUser.id;
+    const isOwner = reservation.tool?.ownerId === dbUser.id;
+
+    if (!isBorrower && !isOwner) {
+      this.setStatus(403);
+      throw new Error('Only participants in this reservation can leave reviews.');
+    }
+
+    // Only completed reservations can be reviewed
+    if (reservation.status !== 'completed') {
+      this.setStatus(400);
+      throw new Error('Reviews can only be submitted for completed reservations.');
+    }
+
+    // Determine who is being reviewed
+    // Borrower reviews the owner, owner reviews the borrower
+    const revieweeId = isBorrower ? reservation.tool?.ownerId : reservation.borrowerId;
+    if (!revieweeId) {
+      this.setStatus(400);
+      throw new Error('Unable to determine reviewee.');
+    }
+
+    // Check if user has already reviewed this reservation
+    const existingReview = await dabService.getReviewForReservation(id, dbUser.id, authToken);
+    if (existingReview) {
+      this.setStatus(400);
+      throw new Error('You have already submitted a review for this reservation.');
+    }
+
+    // Create the review
+    const review = await dabService.createReview(
+      {
+        reservationId: id,
+        reviewerId: dbUser.id,
+        revieweeId,
+        rating: body.rating,
+        comment: body.comment,
+      },
+      authToken
+    );
+
+    // Update the reviewee's reputation score
+    await dabService.updateUserReputationScore(revieweeId, authToken);
+
+    // Send notification to reviewee
+    const reviewerUser = await dabService.getUserById(dbUser.id, authToken);
+    if (reviewerUser) {
+      await notificationService.notifyReviewReceived(
+        revieweeId,
+        reviewerUser.displayName,
+        body.rating,
+        id,
+        authToken
+      );
+    }
+
+    this.setStatus(201);
+    return review as ReviewResponse;
+  }
+
+  /**
+   * Get reviews for a reservation
+   * @summary Get all reviews for a reservation
+   */
+  @Get('/{id}/reviews')
+  @Security('Bearer')
+  @Response<ReservationErrorResponse>(403, 'Not authorized to view this reservation')
+  @Response<ReservationErrorResponse>(404, 'Reservation not found')
+  public async getReservationReviews(
+    @Request() request: ExpressRequest,
+    @Path() id: string
+  ): Promise<ReviewResponse[]> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    const reservation = await dabService.getReservationById(id, authToken);
+    if (!reservation) {
+      this.setStatus(404);
+      throw new Error('Reservation not found.');
+    }
+
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      this.setStatus(403);
+      throw new Error('Not authorized to view this reservation.');
+    }
+
+    const isBorrower = reservation.borrowerId === dbUser.id;
+    const isOwner = reservation.tool?.ownerId === dbUser.id;
+
+    if (!isBorrower && !isOwner) {
+      this.setStatus(403);
+      throw new Error('Not authorized to view this reservation.');
+    }
+
+    return dabService.getReviewsForReservation(id, authToken) as Promise<ReviewResponse[]>;
+  }
+}
+
+/**
+ * Notifications Controller
+ * Handles notification endpoints
+ */
+@Route('api/notifications')
+@Tags('Notifications')
+export class NotificationsController extends Controller {
+  /**
+   * Get notifications for the current user
+   * @summary Get user's notifications
+   */
+  @Get('/')
+  @Security('Bearer')
+  public async getNotifications(
+    @Request() request: ExpressRequest,
+    @Query() limit?: number
+  ): Promise<NotificationListResponse> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      return { items: [], unreadCount: 0 };
+    }
+
+    const notifications = await dabService.getNotificationsForUser(
+      dbUser.id,
+      limit || 50,
+      authToken
+    );
+    const unreadCount = await dabService.getUnreadNotificationCount(dbUser.id, authToken);
+
+    return {
+      items: notifications as NotificationResponse[],
+      unreadCount,
+    };
+  }
+
+  /**
+   * Get unread notification count
+   * @summary Get count of unread notifications
+   */
+  @Get('/unread-count')
+  @Security('Bearer')
+  public async getUnreadCount(
+    @Request() request: ExpressRequest
+  ): Promise<{ count: number }> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      return { count: 0 };
+    }
+
+    const count = await dabService.getUnreadNotificationCount(dbUser.id, authToken);
+    return { count };
+  }
+
+  /**
+   * Mark a notification as read
+   * @summary Mark notification as read
+   */
+  @Post('/{id}/read')
+  @Security('Bearer')
+  @Response<ReservationErrorResponse>(404, 'Notification not found')
+  public async markAsRead(
+    @Request() request: ExpressRequest,
+    @Path() id: string
+  ): Promise<NotificationResponse> {
+    const authToken = request.headers.authorization?.substring(7);
+
+    const notification = await dabService.markNotificationAsRead(id, authToken);
+    return notification as NotificationResponse;
+  }
+
+  /**
+   * Mark all notifications as read
+   * @summary Mark all notifications as read
+   */
+  @Post('/read-all')
+  @Security('Bearer')
+  public async markAllAsRead(
+    @Request() request: ExpressRequest
+  ): Promise<{ success: boolean }> {
+    const user = request.user as AuthenticatedUser;
+    const authToken = request.headers.authorization?.substring(7);
+
+    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      return { success: false };
+    }
+
+    await dabService.markAllNotificationsAsRead(dbUser.id, authToken);
+    return { success: true };
+  }
+}
+
+/**
+ * User Reviews Controller
+ * Handles user review endpoints
+ */
+@Route('api/users')
+@Tags('Users')
+export class UserReviewsController extends Controller {
+  /**
+   * Get reviews for a user
+   * @summary Get all reviews for a specific user
+   */
+  @Get('/{id}/reviews')
+  @Security('Bearer')
+  public async getUserReviews(
+    @Request() request: ExpressRequest,
+    @Path() id: string
+  ): Promise<UserReviewsResponse> {
+    const authToken = request.headers.authorization?.substring(7);
+
+    const reviews = await dabService.getReviewsForUser(id, authToken);
+
+    const totalReviews = reviews.length;
+    let averageRating = 0;
+
+    if (totalReviews > 0) {
+      const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+      averageRating = Math.round((totalRating / totalReviews) * 10) / 10;
+    }
+
+    return {
+      reviews: reviews as ReviewResponse[],
+      averageRating,
+      totalReviews,
+    };
   }
 }

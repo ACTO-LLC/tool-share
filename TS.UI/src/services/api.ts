@@ -238,6 +238,81 @@ export interface CreateReservationRequest {
   note?: string;
 }
 
+// ============================================================================
+// Loan Photo Types
+// ============================================================================
+
+export interface LoanPhoto {
+  id: string;
+  reservationId: string;
+  type: 'before' | 'after';
+  url: string;
+  uploadedBy: string;
+  notes?: string;
+  uploadedAt: string;
+}
+
+// ============================================================================
+// Review Types
+// ============================================================================
+
+export interface Review {
+  id: string;
+  reservationId: string;
+  reviewerId: string;
+  revieweeId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  reviewer?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+  reviewee?: {
+    id: string;
+    displayName: string;
+    avatarUrl?: string;
+  };
+}
+
+export interface UserReviewsResponse {
+  reviews: Review[];
+  averageRating: number;
+  totalReviews: number;
+}
+
+// ============================================================================
+// Notification Types
+// ============================================================================
+
+export type NotificationType =
+  | 'reservation_request'
+  | 'reservation_approved'
+  | 'reservation_declined'
+  | 'reservation_cancelled'
+  | 'pickup_reminder'
+  | 'return_reminder'
+  | 'loan_started'
+  | 'loan_completed'
+  | 'review_received';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface NotificationListResponse {
+  items: Notification[];
+  unreadCount: number;
+}
+
 // Reservation API methods
 export const reservationApi = {
   /**
@@ -329,6 +404,96 @@ export const reservationApi = {
    */
   async getDashboardStats(): Promise<DashboardStats> {
     return apiRequest<DashboardStats>('/api/reservations/stats/dashboard');
+  },
+
+  /**
+   * Upload a loan photo (before or after)
+   */
+  async uploadPhoto(id: string, file: File, type: 'before' | 'after', notes?: string): Promise<LoanPhoto> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    if (notes) {
+      formData.append('notes', notes);
+    }
+    return apiRequestFormData<LoanPhoto>(`/api/reservations/${id}/photos`, formData);
+  },
+
+  /**
+   * Get loan photos for a reservation
+   */
+  async getPhotos(id: string, type?: 'before' | 'after'): Promise<LoanPhoto[]> {
+    const queryParams = type ? `?type=${type}` : '';
+    return apiRequest<LoanPhoto[]>(`/api/reservations/${id}/photos${queryParams}`);
+  },
+
+  /**
+   * Submit a review for a completed reservation
+   */
+  async submitReview(id: string, rating: number, comment?: string): Promise<Review> {
+    return apiRequest<Review>(`/api/reservations/${id}/review`, {
+      method: 'POST',
+      body: { rating, comment },
+    });
+  },
+
+  /**
+   * Get reviews for a reservation
+   */
+  async getReviews(id: string): Promise<Review[]> {
+    return apiRequest<Review[]>(`/api/reservations/${id}/reviews`);
+  },
+};
+
+// ============================================================================
+// Notification API
+// ============================================================================
+
+export const notificationApi = {
+  /**
+   * Get notifications for the current user
+   */
+  async list(limit?: number): Promise<NotificationListResponse> {
+    const queryParams = limit ? `?limit=${limit}` : '';
+    return apiRequest<NotificationListResponse>(`/api/notifications${queryParams}`);
+  },
+
+  /**
+   * Get unread notification count
+   */
+  async getUnreadCount(): Promise<{ count: number }> {
+    return apiRequest<{ count: number }>('/api/notifications/unread-count');
+  },
+
+  /**
+   * Mark a notification as read
+   */
+  async markAsRead(id: string): Promise<Notification> {
+    return apiRequest<Notification>(`/api/notifications/${id}/read`, {
+      method: 'POST',
+    });
+  },
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllAsRead(): Promise<{ success: boolean }> {
+    return apiRequest<{ success: boolean }>('/api/notifications/read-all', {
+      method: 'POST',
+    });
+  },
+};
+
+// ============================================================================
+// User Reviews API
+// ============================================================================
+
+export const reviewsApi = {
+  /**
+   * Get reviews for a specific user
+   */
+  async getUserReviews(userId: string): Promise<UserReviewsResponse> {
+    return apiRequest<UserReviewsResponse>(`/api/users/${userId}/reviews`);
   },
 };
 
@@ -580,4 +745,4 @@ export const userApi = {
 };
 
 export { ApiError };
-export default { toolsApi, reservationApi, userApi };
+export default { toolsApi, reservationApi, userApi, notificationApi, reviewsApi };

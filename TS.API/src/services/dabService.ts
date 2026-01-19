@@ -679,6 +679,479 @@ export async function updateReservation(
   return result.updateReservation;
 }
 
+// ============================================================================
+// Loan Photo operations
+// ============================================================================
+
+interface LoanPhoto {
+  id: string;
+  reservationId: string;
+  type: 'before' | 'after';
+  url: string;
+  uploadedBy: string;
+  notes?: string;
+  uploadedAt: string;
+}
+
+export async function createLoanPhoto(
+  data: {
+    reservationId: string;
+    type: 'before' | 'after';
+    url: string;
+    uploadedBy: string;
+    notes?: string;
+  },
+  authToken?: string
+): Promise<LoanPhoto> {
+  const query = `
+    mutation CreateLoanPhoto($item: CreateLoanPhotoInput!) {
+      createLoanPhoto(item: $item) {
+        id
+        reservationId
+        type
+        url
+        uploadedBy
+        notes
+        uploadedAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ createLoanPhoto: LoanPhoto }>(
+    query,
+    {
+      item: {
+        id: crypto.randomUUID(),
+        reservationId: data.reservationId,
+        type: data.type,
+        url: data.url,
+        uploadedBy: data.uploadedBy,
+        notes: data.notes || null,
+        uploadedAt: new Date().toISOString(),
+      },
+    },
+    authToken
+  );
+
+  return result.createLoanPhoto;
+}
+
+export async function getLoanPhotos(reservationId: string, authToken?: string): Promise<LoanPhoto[]> {
+  const query = `
+    query GetLoanPhotos($filter: LoanPhotoFilterInput) {
+      loanPhotos(filter: $filter, orderBy: { uploadedAt: ASC }) {
+        items {
+          id
+          reservationId
+          type
+          url
+          uploadedBy
+          notes
+          uploadedAt
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ loanPhotos: { items: LoanPhoto[] } }>(
+    query,
+    { filter: { reservationId: { eq: reservationId } } },
+    authToken
+  );
+
+  return result.loanPhotos.items;
+}
+
+export async function getLoanPhotosByType(
+  reservationId: string,
+  type: 'before' | 'after',
+  authToken?: string
+): Promise<LoanPhoto[]> {
+  const query = `
+    query GetLoanPhotosByType($filter: LoanPhotoFilterInput) {
+      loanPhotos(filter: $filter, orderBy: { uploadedAt: ASC }) {
+        items {
+          id
+          reservationId
+          type
+          url
+          uploadedBy
+          notes
+          uploadedAt
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ loanPhotos: { items: LoanPhoto[] } }>(
+    query,
+    {
+      filter: {
+        reservationId: { eq: reservationId },
+        type: { eq: type }
+      }
+    },
+    authToken
+  );
+
+  return result.loanPhotos.items;
+}
+
+// ============================================================================
+// Review operations
+// ============================================================================
+
+interface Review {
+  id: string;
+  reservationId: string;
+  reviewerId: string;
+  revieweeId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  reviewer?: User;
+  reviewee?: User;
+}
+
+export async function createReview(
+  data: {
+    reservationId: string;
+    reviewerId: string;
+    revieweeId: string;
+    rating: number;
+    comment?: string;
+  },
+  authToken?: string
+): Promise<Review> {
+  const query = `
+    mutation CreateReview($item: CreateReviewInput!) {
+      createReview(item: $item) {
+        id
+        reservationId
+        reviewerId
+        revieweeId
+        rating
+        comment
+        createdAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ createReview: Review }>(
+    query,
+    {
+      item: {
+        id: crypto.randomUUID(),
+        reservationId: data.reservationId,
+        reviewerId: data.reviewerId,
+        revieweeId: data.revieweeId,
+        rating: data.rating,
+        comment: data.comment || null,
+        createdAt: new Date().toISOString(),
+      },
+    },
+    authToken
+  );
+
+  return result.createReview;
+}
+
+export async function getReviewsForUser(userId: string, authToken?: string): Promise<Review[]> {
+  const query = `
+    query GetReviewsForUser($filter: ReviewFilterInput) {
+      reviews(filter: $filter, orderBy: { createdAt: DESC }) {
+        items {
+          id
+          reservationId
+          reviewerId
+          revieweeId
+          rating
+          comment
+          createdAt
+          reviewer {
+            id
+            displayName
+            avatarUrl
+          }
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ reviews: { items: Review[] } }>(
+    query,
+    { filter: { revieweeId: { eq: userId } } },
+    authToken
+  );
+
+  return result.reviews.items;
+}
+
+export async function getReviewForReservation(
+  reservationId: string,
+  reviewerId: string,
+  authToken?: string
+): Promise<Review | null> {
+  const query = `
+    query GetReviewForReservation($filter: ReviewFilterInput) {
+      reviews(filter: $filter) {
+        items {
+          id
+          reservationId
+          reviewerId
+          revieweeId
+          rating
+          comment
+          createdAt
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ reviews: { items: Review[] } }>(
+    query,
+    {
+      filter: {
+        reservationId: { eq: reservationId },
+        reviewerId: { eq: reviewerId }
+      }
+    },
+    authToken
+  );
+
+  return result.reviews.items[0] || null;
+}
+
+export async function getReviewsForReservation(reservationId: string, authToken?: string): Promise<Review[]> {
+  const query = `
+    query GetReviewsForReservation($filter: ReviewFilterInput) {
+      reviews(filter: $filter, orderBy: { createdAt: ASC }) {
+        items {
+          id
+          reservationId
+          reviewerId
+          revieweeId
+          rating
+          comment
+          createdAt
+          reviewer {
+            id
+            displayName
+            avatarUrl
+          }
+          reviewee {
+            id
+            displayName
+            avatarUrl
+          }
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ reviews: { items: Review[] } }>(
+    query,
+    { filter: { reservationId: { eq: reservationId } } },
+    authToken
+  );
+
+  return result.reviews.items;
+}
+
+export async function calculateUserReputationScore(userId: string, authToken?: string): Promise<number> {
+  const reviews = await getReviewsForUser(userId, authToken);
+
+  if (reviews.length === 0) {
+    return 0;
+  }
+
+  const totalRating = reviews.reduce((sum, review) => sum + review.rating, 0);
+  return Math.round((totalRating / reviews.length) * 10) / 10; // Round to 1 decimal
+}
+
+export async function updateUserReputationScore(userId: string, authToken?: string): Promise<void> {
+  const score = await calculateUserReputationScore(userId, authToken);
+
+  const query = `
+    mutation UpdateUserReputation($id: ID!, $item: UpdateUserInput!) {
+      updateUser(id: $id, item: $item) {
+        id
+        reputationScore
+      }
+    }
+  `;
+
+  await executeGraphQL<{ updateUser: User }>(
+    query,
+    {
+      id: userId,
+      item: {
+        reputationScore: score,
+        updatedAt: new Date().toISOString(),
+      },
+    },
+    authToken
+  );
+}
+
+// ============================================================================
+// Notification operations
+// ============================================================================
+
+interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  message: string;
+  relatedId?: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export async function createNotification(
+  data: {
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+    relatedId?: string;
+  },
+  authToken?: string
+): Promise<Notification> {
+  const query = `
+    mutation CreateNotification($item: CreateNotificationInput!) {
+      createNotification(item: $item) {
+        id
+        userId
+        type
+        title
+        message
+        relatedId
+        isRead
+        createdAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ createNotification: Notification }>(
+    query,
+    {
+      item: {
+        id: crypto.randomUUID(),
+        userId: data.userId,
+        type: data.type,
+        title: data.title,
+        message: data.message,
+        relatedId: data.relatedId || null,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      },
+    },
+    authToken
+  );
+
+  return result.createNotification;
+}
+
+export async function getNotificationsForUser(
+  userId: string,
+  limit: number = 50,
+  authToken?: string
+): Promise<Notification[]> {
+  const query = `
+    query GetNotifications($filter: NotificationFilterInput, $first: Int) {
+      notifications(filter: $filter, first: $first, orderBy: { createdAt: DESC }) {
+        items {
+          id
+          userId
+          type
+          title
+          message
+          relatedId
+          isRead
+          createdAt
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ notifications: { items: Notification[] } }>(
+    query,
+    {
+      filter: { userId: { eq: userId } },
+      first: limit,
+    },
+    authToken
+  );
+
+  return result.notifications.items;
+}
+
+export async function getUnreadNotificationCount(userId: string, authToken?: string): Promise<number> {
+  const query = `
+    query GetUnreadNotifications($filter: NotificationFilterInput) {
+      notifications(filter: $filter) {
+        items {
+          id
+        }
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ notifications: { items: { id: string }[] } }>(
+    query,
+    {
+      filter: {
+        userId: { eq: userId },
+        isRead: { eq: false }
+      }
+    },
+    authToken
+  );
+
+  return result.notifications.items.length;
+}
+
+export async function markNotificationAsRead(id: string, authToken?: string): Promise<Notification> {
+  const query = `
+    mutation MarkNotificationRead($id: ID!, $item: UpdateNotificationInput!) {
+      updateNotification(id: $id, item: $item) {
+        id
+        userId
+        type
+        title
+        message
+        relatedId
+        isRead
+        createdAt
+      }
+    }
+  `;
+
+  const result = await executeGraphQL<{ updateNotification: Notification }>(
+    query,
+    {
+      id,
+      item: { isRead: true },
+    },
+    authToken
+  );
+
+  return result.updateNotification;
+}
+
+export async function markAllNotificationsAsRead(userId: string, authToken?: string): Promise<void> {
+  // Get all unread notifications
+  const notifications = await getNotificationsForUser(userId, 100, authToken);
+  const unread = notifications.filter(n => !n.isRead);
+
+  // Mark each as read
+  for (const notification of unread) {
+    await markNotificationAsRead(notification.id, authToken);
+  }
+}
+
 // Stats for dashboard
 export async function getDashboardStats(userId: string, authToken?: string): Promise<{
   toolsListed: number;

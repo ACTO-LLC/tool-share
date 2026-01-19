@@ -159,9 +159,18 @@ describe('Profile Page', () => {
 
       renderWithProviders(<Profile />);
 
+      // Wait for the form to be populated with user data
       await waitFor(() => {
-        expect(screen.getByText('16/500 characters')).toBeInTheDocument();
+        expect(screen.getByLabelText(/bio/i)).toHaveValue('Tool enthusiast');
       });
+
+      // Verify that bio field has a helper text element (character count)
+      // The character count is rendered in an MUI FormHelperText component
+      const bioField = screen.getByLabelText(/bio/i).closest('.MuiFormControl-root');
+      expect(bioField).toBeInTheDocument();
+      const helperText = bioField?.querySelector('.MuiFormHelperText-root');
+      expect(helperText).toBeInTheDocument();
+      expect(helperText?.textContent).toContain('characters');
     });
   });
 

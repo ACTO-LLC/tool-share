@@ -13,13 +13,18 @@
  *   --flow=X    Only generate specific flow (dashboard, tools, reservations, circles, profile)
  */
 
-import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import { chromium, Browser, Page, BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
-const OUTPUT_DIR = path.join(__dirname, 'images');
-const VIDEO_DIR = path.join(__dirname, 'videos');
+const DOCS_DIR = path.join(__dirname, '..', '..', 'docs', 'user-guide');
+const OUTPUT_DIR = path.join(DOCS_DIR, 'images');
+const VIDEO_DIR = path.join(DOCS_DIR, 'videos');
 
 interface DocStep {
   name: string;
@@ -51,7 +56,7 @@ const flows: DocFlow[] = [
         description: 'When you log in, you see your personalized dashboard.',
         action: async (page) => {
           await page.goto('/');
-          await page.waitForSelector('[role="main"]');
+          await page.waitForTimeout(1000);
         },
         screenshot: '01-dashboard-home.png',
         notes: [
@@ -59,14 +64,6 @@ const flows: DocFlow[] = [
           'Quick actions let you add tools or browse available tools',
           'Your recent tools are displayed below'
         ]
-      },
-      {
-        name: 'Quick Actions',
-        description: 'Use quick action buttons to navigate to common tasks.',
-        action: async (page) => {
-          await page.hover('button:has-text("Add Tool")');
-        },
-        screenshot: '01-dashboard-actions.png'
       }
     ]
   },
@@ -80,7 +77,7 @@ const flows: DocFlow[] = [
         description: 'View all tools you have listed for lending.',
         action: async (page) => {
           await page.goto('/my-tools');
-          await page.waitForSelector('h4');
+          await page.waitForTimeout(1000);
         },
         screenshot: '02-my-tools-list.png',
         notes: [
@@ -93,7 +90,7 @@ const flows: DocFlow[] = [
         description: 'Click "Add Tool" to list a new tool.',
         action: async (page) => {
           await page.goto('/my-tools/add');
-          await page.waitForSelector('form');
+          await page.waitForTimeout(1000);
         },
         screenshot: '02-add-tool-form.png',
         notes: [
@@ -103,46 +100,17 @@ const flows: DocFlow[] = [
         ]
       },
       {
-        name: 'Tool Categories',
-        description: 'Select a category for your tool.',
-        action: async (page) => {
-          await page.click('[name="category"]');
-          await page.waitForTimeout(300);
-        },
-        screenshot: '02-tool-categories.png'
-      },
-      {
         name: 'Browse Tools',
         description: 'Browse tools available to borrow from your circles.',
         action: async (page) => {
           await page.goto('/browse');
-          await page.waitForSelector('[role="main"]');
+          await page.waitForTimeout(1000);
         },
         screenshot: '02-browse-tools.png',
         notes: [
           'Filter by category or search by name',
           'Only tools from your circles are shown',
           'Click a tool to view details and request to borrow'
-        ]
-      },
-      {
-        name: 'Tool Detail',
-        description: 'View tool details and request to borrow.',
-        action: async (page) => {
-          // Click first tool card if available
-          const toolCard = page.locator('.MuiCard-root').first();
-          if (await toolCard.isVisible()) {
-            await toolCard.click();
-            await page.waitForTimeout(500);
-          } else {
-            await page.goto('/tools/example');
-          }
-        },
-        screenshot: '02-tool-detail.png',
-        notes: [
-          'See tool photos, description, and owner info',
-          'Check availability calendar',
-          'Click "Request to Borrow" to start a reservation'
         ]
       }
     ]
@@ -157,34 +125,12 @@ const flows: DocFlow[] = [
         description: 'View all your borrowing and lending activity.',
         action: async (page) => {
           await page.goto('/reservations');
-          await page.waitForSelector('[role="tablist"]');
+          await page.waitForTimeout(1000);
         },
         screenshot: '03-reservations-page.png',
         notes: [
           'Borrowing tab shows tools you have requested or borrowed',
           'Lending tab shows requests for your tools'
-        ]
-      },
-      {
-        name: 'Borrowing Tab',
-        description: 'Track tools you are borrowing.',
-        action: async (page) => {
-          await page.click('[role="tab"]:has-text("Borrowing")');
-          await page.waitForTimeout(300);
-        },
-        screenshot: '03-borrowing-tab.png'
-      },
-      {
-        name: 'Lending Tab',
-        description: 'Manage requests for your tools.',
-        action: async (page) => {
-          await page.click('[role="tab"]:has-text("Lending")');
-          await page.waitForTimeout(300);
-        },
-        screenshot: '03-lending-tab.png',
-        notes: [
-          'Approve or decline pending requests',
-          'View active loans and upcoming returns'
         ]
       }
     ]
@@ -199,7 +145,7 @@ const flows: DocFlow[] = [
         description: 'View circles you belong to.',
         action: async (page) => {
           await page.goto('/circles');
-          await page.waitForSelector('h4');
+          await page.waitForTimeout(1000);
         },
         screenshot: '04-circles-list.png',
         notes: [
@@ -212,7 +158,7 @@ const flows: DocFlow[] = [
         description: 'Start a new sharing circle.',
         action: async (page) => {
           await page.goto('/circles/create');
-          await page.waitForSelector('form');
+          await page.waitForTimeout(1000);
         },
         screenshot: '04-create-circle.png',
         notes: [
@@ -226,30 +172,12 @@ const flows: DocFlow[] = [
         description: 'Join an existing circle with an invite code.',
         action: async (page) => {
           await page.goto('/circles/join');
-          await page.waitForSelector('input');
+          await page.waitForTimeout(1000);
         },
         screenshot: '04-join-circle.png',
         notes: [
           'Enter the 8-character invite code',
           'Ask the circle owner for the code'
-        ]
-      },
-      {
-        name: 'Circle Detail',
-        description: 'View circle members and shared tools.',
-        action: async (page) => {
-          await page.goto('/circles');
-          const circleCard = page.locator('.MuiCard-root').first();
-          if (await circleCard.isVisible()) {
-            await circleCard.click();
-            await page.waitForTimeout(500);
-          }
-        },
-        screenshot: '04-circle-detail.png',
-        notes: [
-          'Members tab shows who is in the circle',
-          'Tools tab shows all tools shared in this circle',
-          'Admins can invite new members or remove existing ones'
         ]
       }
     ]
@@ -264,7 +192,7 @@ const flows: DocFlow[] = [
         description: 'View and edit your profile information.',
         action: async (page) => {
           await page.goto('/profile');
-          await page.waitForSelector('form');
+          await page.waitForTimeout(1000);
         },
         screenshot: '05-profile-page.png',
         notes: [
@@ -278,7 +206,7 @@ const flows: DocFlow[] = [
         description: 'View and manage your notifications.',
         action: async (page) => {
           await page.goto('/notifications');
-          await page.waitForSelector('h4');
+          await page.waitForTimeout(1000);
         },
         screenshot: '05-notifications.png',
         notes: [
@@ -378,7 +306,7 @@ ${flows.map(f => `- [${f.title}](#${f.id})`).join('\n')}
 *This guide was auto-generated using Playwright. Last updated: ${new Date().toISOString().split('T')[0]}*
 `;
 
-  const outputPath = path.join(__dirname, 'USER_GUIDE.md');
+  const outputPath = path.join(DOCS_DIR, 'USER_GUIDE.md');
   fs.writeFileSync(outputPath, fullGuide);
   console.log(`\nGenerated: ${outputPath}`);
 }
@@ -407,6 +335,7 @@ async function main() {
   const contextOptions: any = {
     viewport: { width: 1280, height: 720 },
     deviceScaleFactor: 2, // Retina screenshots
+    baseURL: BASE_URL,
   };
 
   if (recordVideo) {

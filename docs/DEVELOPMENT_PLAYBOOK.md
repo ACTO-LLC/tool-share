@@ -321,11 +321,19 @@ See [E2E_AUTH_SETUP.md](./E2E_AUTH_SETUP.md) for complete documentation.
 # Start all services
 docker-compose up -d
 
-# Or individually:
+# Create blob storage container (required for photo uploads)
+cd TS.API && node -e "
+const { BlobServiceClient } = require('@azure/storage-blob');
+const cs = 'DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;';
+BlobServiceClient.fromConnectionString(cs).getContainerClient('tool-photos').createIfNotExists({access:'blob'}).then(r => console.log('Container:', r.succeeded ? 'created' : 'exists'));
+"
+
+# Start the applications
 cd TS.API && npm run dev
 cd TS.UI && npm run dev
-cd TS.DataAPI && dab start
 ```
+
+**Important:** The blob container must exist before photo uploads will work. If you get 500 errors on photo uploads, run the container creation script above.
 
 ### Environment Variables
 
@@ -477,6 +485,30 @@ Create Circle Management feature:
 - Start fresh
 
 **Example:** Issue #56 - Auth token validates correctly but DAB returns 400. Documented all working auth config and specific failure point for fresh investigation.
+
+### 2026-01-20: Azurite SDK Version Mismatch
+
+**Problem:** Photo uploads failing with 500 errors. API logs showed Azure Storage SDK requesting API version not supported by Azurite.
+
+**Error:**
+```
+The API version 2026-02-06 is not supported by Azurite.
+```
+
+**Root Cause:** The `@azure/storage-blob` npm package was newer than the Azurite Docker image supported.
+
+**Solution:**
+1. Add `--skipApiVersionCheck` flag to Azurite in `docker-compose.yml`:
+   ```yaml
+   command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
+   ```
+2. Restart Azurite: `docker-compose up -d azurite`
+3. Create the blob container (see Local Development section)
+
+**Prevention:**
+- Always include `--skipApiVersionCheck` in Azurite config for local dev
+- Add container creation to setup scripts
+- Document blob storage setup requirements
 
 ---
 

@@ -313,3 +313,82 @@ Implemented a **service principal with client credentials flow** that gets mappe
 - [E2E_AUTH_SETUP.md](./E2E_AUTH_SETUP.md) - Complete setup guide
 - [ADR-009-playwright-e2e.md](./architecture/adrs/ADR-009-playwright-e2e.md) - E2E testing decision
 - [DEVELOPMENT_PLAYBOOK.md](./DEVELOPMENT_PLAYBOOK.md) - Testing section
+
+---
+
+## Azurite Blob Storage and Azure SDK Compatibility (2026-01-20)
+
+### The Problem
+Photo uploads were failing with HTTP 500 errors. The browser console showed:
+```
+POST http://localhost:3000/api/tools/{id}/photos 500 (Internal Server Error)
+```
+
+### Root Causes
+
+**1. Azure SDK version mismatch with Azurite**
+
+The `@azure/storage-blob` SDK was requesting API version `2026-02-06`, but the Azurite container only supported older versions:
+```
+Error: The API version 2026-02-06 is not supported by Azurite. Please upgrade Azurite to latest version and retry.
+```
+
+**2. Blob container not created**
+
+Even after fixing the version issue, uploads failed because the `tool-photos` container didn't exist in Azurite.
+
+### The Solution
+
+**1. Add `--skipApiVersionCheck` to Azurite**
+
+Update `docker-compose.yml`:
+```yaml
+azurite:
+  image: mcr.microsoft.com/azure-storage/azurite:latest
+  container_name: toolshare-storage
+  ports:
+    - "10000:10000"  # Blob
+    - "10001:10001"  # Queue
+    - "10002:10002"  # Table
+  volumes:
+    - azurite-data:/data
+  command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
+```
+
+**2. Create the blob container on startup**
+
+Run this script after Azurite starts (or add to a setup script):
+```javascript
+const { BlobServiceClient } = require('@azure/storage-blob');
+const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+const containerClient = blobServiceClient.getContainerClient('tool-photos');
+await containerClient.createIfNotExists({ access: 'blob' });
+```
+
+### Debugging Tips
+
+1. **Check browser Network tab** - Look for 500 errors on `/api/tools/{id}/photos`
+2. **Check API logs** - Look for Azure Storage errors
+3. **Test Azurite connectivity**:
+   ```bash
+   curl http://localhost:10000/devstoreaccount1?comp=list
+   ```
+4. **Verify container exists**:
+   ```bash
+   cd TS.API && node -e "
+   const { BlobServiceClient } = require('@azure/storage-blob');
+   const client = BlobServiceClient.fromConnectionString(process.env.AZURE_STORAGE_CONNECTION_STRING);
+   client.listContainers().byPage().next().then(r => console.log(r.value.containerItems));
+   "
+   ```
+
+### Prevention
+
+Add container creation to the development setup script or docker-compose healthcheck. Consider adding a startup check in the API that creates the container if it doesn't exist.
+
+### Related Files
+
+- `docker-compose.yml` - Azurite configuration
+- `TS.API/src/services/blobStorageService.ts` - Blob upload logic
+- `TS.API/src/routes/toolsController.ts` - Photo upload endpoint

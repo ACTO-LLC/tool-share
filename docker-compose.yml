@@ -48,6 +48,7 @@ services:
       - "10002:10002"  # Table
     volumes:
       - azurite-data:/data
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --skipApiVersionCheck
 
 volumes:
   sqlserver-data:

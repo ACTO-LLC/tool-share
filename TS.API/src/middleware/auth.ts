@@ -100,6 +100,8 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
   const tenantId = config.AZURE_AD_B2C_TENANT_ID;
   const clientId = config.AZURE_AD_B2C_CLIENT_ID;
 
+  console.log('[Auth] Config:', { tenantId, clientId, authDomain: config.AZURE_AD_AUTH_DOMAIN, tenantGuid: config.AZURE_AD_TENANT_GUID });
+
   // Development mode: decode without verification if no Azure AD B2C configured
   if (!tenantId || !clientId || tenantId === '' || clientId === '') {
     console.warn('Azure AD B2C not configured - using development mode (token not verified)');
@@ -115,6 +117,16 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
   if (!decodedHeader || !decodedHeader.header) {
     throw new Error('Invalid token format');
   }
+
+  // Decode token to see actual claims for debugging
+  const tokenPayload = jwt.decode(token) as AzureB2CTokenClaims | null;
+  console.log('[Auth] Token claims:', {
+    iss: tokenPayload?.iss,
+    aud: tokenPayload?.aud,
+    sub: tokenPayload?.sub,
+    oid: tokenPayload?.oid,
+    exp: tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : undefined,
+  });
 
   const signingKey = await getSigningKey(decodedHeader.header);
 
@@ -140,18 +152,23 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
     ];
   }
 
+  console.log('[Auth] Expected audience:', clientId);
+  console.log('[Auth] Expected issuers:', issuers);
+
   const verifyOptions: VerifyOptions = {
     algorithms: ['RS256'],
     audience: clientId,
-    issuer: issuers,
+    issuer: issuers as [string, ...string[]],
   };
 
   return new Promise((resolve, reject) => {
     jwt.verify(token, signingKey, verifyOptions, (err, decoded) => {
       if (err) {
+        console.error('[Auth] JWT verify error:', err.message);
         reject(new Error(`Token verification failed: ${err.message}`));
         return;
       }
+      console.log('[Auth] Token verified successfully for user:', (decoded as AzureB2CTokenClaims)?.oid);
       resolve(decoded as AzureB2CTokenClaims);
     });
   });
@@ -172,6 +189,8 @@ export async function expressAuthentication(
   securityName: string,
   _scopes?: string[]
 ): Promise<AuthenticatedUser> {
+  console.log('[Auth] expressAuthentication called for:', request.path);
+
   if (securityName !== 'Bearer') {
     throw new Error('Unknown security scheme');
   }
@@ -209,6 +228,7 @@ export async function expressAuthentication(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Token validation failed';
+    console.error('[Auth] Authentication error:', message);
     throw new Error(`Authentication failed: ${message}`);
   }
 }

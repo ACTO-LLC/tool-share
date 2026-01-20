@@ -127,17 +127,29 @@ class DabClient {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await this.client.post<GraphQLResponse<T>>(
-      '',
-      { query, variables },
-      { headers }
-    );
+    try {
+      const response = await this.client.post<GraphQLResponse<T>>(
+        '',
+        { query, variables },
+        { headers }
+      );
 
-    if (response.data.errors && response.data.errors.length > 0) {
-      throw new Error(response.data.errors[0].message);
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.error('[DAB] GraphQL errors:', JSON.stringify(response.data.errors, null, 2));
+        throw new Error(response.data.errors[0].message);
+      }
+
+      return response.data.data;
+    } catch (error) {
+      if (error instanceof Error && 'response' in error) {
+        const axiosError = error as { response?: { status: number; data: unknown } };
+        console.error('[DAB] Request failed:', {
+          status: axiosError.response?.status,
+          data: JSON.stringify(axiosError.response?.data, null, 2),
+        });
+      }
+      throw error;
     }
-
-    return response.data.data;
   }
 
   // ==================== USER QUERIES ====================

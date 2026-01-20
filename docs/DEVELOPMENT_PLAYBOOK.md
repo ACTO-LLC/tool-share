@@ -357,6 +357,60 @@ Create Circle Management feature:
 - Component → Uses hook, never calls API directly
 - Tests → Test hook with mocked API, test component with mocked hook
 
+### 2026-01-20: 20-Minute Debugging Rule
+
+**Problem:** Spent extended time debugging an auth/DAB integration issue. AI context filled with debugging attempts, making it harder to see the solution clearly.
+
+**Impact:**
+- Context window filled with trial-and-error debugging logs
+- Hard to maintain clear picture of what was tried
+- Repeated similar approaches without fresh perspective
+
+**Solution:** If debugging takes longer than 20 minutes without resolution:
+
+1. **Document findings** - Create a GitHub issue with:
+   - What works (green checkmarks)
+   - What fails (specific errors)
+   - Configuration details
+   - Code changes attempted
+   - Logs and error messages
+
+2. **Clear context** - Start fresh conversation with:
+   - Link to the GitHub issue
+   - Clean slate for new approaches
+
+3. **Issue Template:**
+   ```markdown
+   ## Summary
+   [One-line description of the problem]
+
+   ## What Works
+   - ✅ [Working component 1]
+   - ✅ [Working component 2]
+
+   ## What Fails
+   - ❌ [Failing component with specific error]
+
+   ## Logs
+   [Relevant error messages and debug output]
+
+   ## Attempted Fixes
+   1. [Fix 1 - result]
+   2. [Fix 2 - result]
+
+   ## Next Steps to Investigate
+   1. [Suggested approach 1]
+   2. [Suggested approach 2]
+   ```
+
+**Prevention:** Set a mental timer. After 20 minutes of debugging:
+- Stop
+- Document
+- Create issue
+- Start fresh
+
+**Example:** Issue #56 - Auth token validates correctly but DAB returns 400. Documented all working auth config and specific failure point for fresh investigation.
+
 ---
 
-*Last updated: 2026-01-18*
+*Last updated: 2026-01-20*

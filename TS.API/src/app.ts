@@ -40,8 +40,18 @@ app.post(
 
 // Middleware
 app.use(helmet());
+// Allow multiple origins for development flexibility
+const allowedOrigins = [config.CORS_ORIGIN, 'http://localhost:5173', 'http://localhost:5175'];
 app.use(cors({
-  origin: config.CORS_ORIGIN,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`[CORS] Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
@@ -90,6 +100,41 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   }
 
   if (err instanceof Error) {
+    // Check for authentication errors
+    const authErrorMessages = [
+      'No authorization token provided',
+      'Unknown security scheme',
+      'Authentication failed',
+      'Invalid token',
+      'Token verification failed',
+    ];
+    const isAuthError = authErrorMessages.some(msg => err.message.includes(msg));
+
+    if (isAuthError) {
+      console.warn(`[Auth] Unauthorized: ${err.message}`);
+      return res.status(401).json({
+        message: 'Unauthorized',
+        error: err.message,
+      });
+    }
+
+    // Check for forbidden (403) errors
+    if (err.message.includes('Not authorized')) {
+      console.warn(`[Auth] Forbidden: ${err.message}`);
+      return res.status(403).json({
+        message: 'Forbidden',
+        error: err.message,
+      });
+    }
+
+    // Check for not found (404) errors
+    if (err.message.includes('not found') || err.message.includes('Not found')) {
+      return res.status(404).json({
+        message: 'Not Found',
+        error: err.message,
+      });
+    }
+
     console.error(`Error: ${err.message}`);
     return res.status(500).json({
       message: 'Internal Server Error',

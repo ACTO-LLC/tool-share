@@ -7,13 +7,7 @@ import {
   Tabs,
   Tab,
   Chip,
-  Avatar,
   Button,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -23,18 +17,14 @@ import {
   Skeleton,
   CircularProgress,
   Snackbar,
+  Stack,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import {
-  Handyman,
   CalendarMonth,
-  CheckCircle,
-  Cancel,
-  HourglassEmpty,
   Search,
-  PlayArrow,
+  FilterList,
 } from '@mui/icons-material';
-import { format, parseISO } from 'date-fns';
 import {
   mockCurrentUser,
   getReservationsByBorrower,
@@ -46,13 +36,28 @@ import {
   ReservationStatus,
   ApiError,
 } from '../services/api';
+import ReservationCard from '../components/ReservationCard';
+import { compareAsc, parseISO } from 'date-fns';
 
 // Check if we should use real API
 const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
 
+// Status filter options
+type StatusFilter = 'all' | ReservationStatus;
+
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
 export default function MyReservations() {
   const navigate = useNavigate();
   const [tab, setTab] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,41 +107,6 @@ export default function MyReservations() {
   useEffect(() => {
     loadReservations();
   }, [loadReservations]);
-
-  const getStatusColor = (status: ReservationStatus) => {
-    switch (status) {
-      case 'confirmed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'active':
-        return 'info';
-      case 'completed':
-        return 'default';
-      case 'cancelled':
-      case 'declined':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusIcon = (status: ReservationStatus) => {
-    switch (status) {
-      case 'confirmed':
-      case 'completed':
-        return <CheckCircle fontSize="small" />;
-      case 'pending':
-        return <HourglassEmpty fontSize="small" />;
-      case 'active':
-        return <PlayArrow fontSize="small" />;
-      case 'cancelled':
-      case 'declined':
-        return <Cancel fontSize="small" />;
-      default:
-        return null;
-    }
-  };
 
   const handleAction = (
     action: 'approve' | 'decline' | 'cancel' | 'pickup' | 'return',
@@ -199,239 +169,128 @@ export default function MyReservations() {
     }
   };
 
-  // Memoize the reservation grouping
-  const groupedBorrowerReservations = useMemo(() => {
-    return {
-      pending: borrowerReservations.filter((r) => r.status === 'pending'),
-      active: borrowerReservations.filter((r) =>
-        ['confirmed', 'active'].includes(r.status)
-      ),
-      past: borrowerReservations.filter((r) =>
-        ['completed', 'cancelled', 'declined'].includes(r.status)
-      ),
-    };
-  }, [borrowerReservations]);
+  // Filter and sort reservations
+  const filteredBorrowerReservations = useMemo(() => {
+    let filtered = borrowerReservations;
 
-  const groupedLenderReservations = useMemo(() => {
-    return {
-      pending: lenderReservations.filter((r) => r.status === 'pending'),
-      active: lenderReservations.filter((r) =>
-        ['confirmed', 'active'].includes(r.status)
-      ),
-      past: lenderReservations.filter((r) =>
-        ['completed', 'cancelled', 'declined'].includes(r.status)
-      ),
-    };
-  }, [lenderReservations]);
-
-  const renderReservationList = (
-    reservations: Reservation[],
-    isLender: boolean
-  ) => {
-    if (reservations.length === 0) {
-      return (
-        <Card>
-          <CardContent sx={{ textAlign: 'center', py: 8 }}>
-            <CalendarMonth sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              {isLender
-                ? 'No reservation requests yet'
-                : "You haven't made any reservations yet"}
-            </Typography>
-            {!isLender && (
-              <Button
-                variant="outlined"
-                startIcon={<Search />}
-                onClick={() => navigate('/browse')}
-                sx={{ mt: 2 }}
-              >
-                Browse Tools
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      );
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((r) => r.status === statusFilter);
     }
 
-    const groups = isLender ? groupedLenderReservations : groupedBorrowerReservations;
+    // Sort by start date (upcoming first)
+    return [...filtered].sort((a, b) =>
+      compareAsc(parseISO(a.startDate), parseISO(b.startDate))
+    );
+  }, [borrowerReservations, statusFilter]);
 
-    const renderGroup = (
-      title: string,
-      items: Reservation[],
-      highlight?: boolean
-    ) => {
-      if (items.length === 0) return null;
+  const filteredLenderReservations = useMemo(() => {
+    let filtered = lenderReservations;
 
-      return (
-        <Card sx={{ mb: 3, bgcolor: highlight ? 'warning.light' : undefined }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {title} ({items.length})
-            </Typography>
-            <List disablePadding>
-              {items.map((reservation, index) => (
-                <Box key={reservation.id}>
-                  {index > 0 && <Divider />}
-                  <ListItem
-                    sx={{
-                      px: 0,
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      alignItems: { xs: 'flex-start', sm: 'center' },
-                      gap: 2,
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Avatar
-                        variant="rounded"
-                        src={reservation.tool?.photos?.[0]?.url}
-                        sx={{ width: 60, height: 60 }}
-                      >
-                        <Handyman />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      sx={{ flex: 1 }}
-                      primary={
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <Typography
-                            variant="subtitle1"
-                            sx={{ cursor: 'pointer' }}
-                            onClick={() =>
-                              navigate(`/tools/${reservation.toolId}`)
-                            }
-                          >
-                            {reservation.tool?.name}
-                          </Typography>
-                          <Chip
-                            label={reservation.status}
-                            size="small"
-                            color={getStatusColor(reservation.status)}
-                            icon={getStatusIcon(reservation.status) || undefined}
-                          />
-                        </Box>
-                      }
-                      secondary={
-                        <>
-                          <Typography variant="body2" component="span">
-                            {format(parseISO(reservation.startDate), 'MMM d')} -{' '}
-                            {format(parseISO(reservation.endDate), 'MMM d, yyyy')}
-                          </Typography>
-                          <br />
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            component="span"
-                          >
-                            {isLender
-                              ? `Requested by ${reservation.borrower?.displayName}`
-                              : `Owner: ${reservation.tool?.owner?.displayName}`}
-                          </Typography>
-                          {reservation.note && (
-                            <>
-                              <br />
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                                component="span"
-                                sx={{ fontStyle: 'italic' }}
-                              >
-                                "{reservation.note}"
-                              </Typography>
-                            </>
-                          )}
-                        </>
-                      }
-                    />
-                    <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
-                      {/* Owner actions */}
-                      {isLender && reservation.status === 'pending' && (
-                        <>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="success"
-                            onClick={() => handleAction('approve', reservation)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            onClick={() => handleAction('decline', reservation)}
-                          >
-                            Decline
-                          </Button>
-                        </>
-                      )}
-                      {/* Borrower actions */}
-                      {!isLender && reservation.status === 'confirmed' && (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="primary"
-                          onClick={() => handleAction('pickup', reservation)}
-                        >
-                          Confirm Pickup
-                        </Button>
-                      )}
-                      {!isLender && reservation.status === 'active' && (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          onClick={() => handleAction('return', reservation)}
-                        >
-                          Confirm Return
-                        </Button>
-                      )}
-                      {/* Cancel - available for both when pending/confirmed */}
-                      {['pending', 'confirmed'].includes(reservation.status) && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={() => handleAction('cancel', reservation)}
-                        >
-                          Cancel
-                        </Button>
-                      )}
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() =>
-                          navigate(`/reservations/${reservation.id}`)
-                        }
-                      >
-                        Details
-                      </Button>
-                    </Box>
-                  </ListItem>
-                </Box>
-              ))}
-            </List>
-          </CardContent>
-        </Card>
-      );
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((r) => r.status === statusFilter);
+    }
+
+    // Sort by start date (upcoming first)
+    return [...filtered].sort((a, b) =>
+      compareAsc(parseISO(a.startDate), parseISO(b.startDate))
+    );
+  }, [lenderReservations, statusFilter]);
+
+  // Get counts per status for the current tab
+  const statusCounts = useMemo(() => {
+    const reservations = tab === 0 ? borrowerReservations : lenderReservations;
+    const counts: Record<StatusFilter, number> = {
+      all: reservations.length,
+      pending: 0,
+      confirmed: 0,
+      active: 0,
+      completed: 0,
+      cancelled: 0,
+      declined: 0,
     };
 
+    reservations.forEach((r) => {
+      if (counts[r.status] !== undefined) {
+        counts[r.status]++;
+      }
+    });
+
+    return counts;
+  }, [borrowerReservations, lenderReservations, tab]);
+
+  // Pending counts for tab badges
+  const borrowerPendingCount = useMemo(
+    () => borrowerReservations.filter((r) => r.status === 'pending').length,
+    [borrowerReservations]
+  );
+
+  const lenderPendingCount = useMemo(
+    () => lenderReservations.filter((r) => r.status === 'pending').length,
+    [lenderReservations]
+  );
+
+  const renderEmptyState = (isLender: boolean) => {
+    const filterLabel = STATUS_FILTERS.find((f) => f.value === statusFilter)?.label || statusFilter;
+
     return (
-      <>
-        {renderGroup(
-          isLender ? 'Pending Requests' : 'Pending Approval',
-          groups.pending,
-          true
-        )}
-        {renderGroup('Active & Upcoming', groups.active)}
-        {renderGroup('Past', groups.past)}
-      </>
+      <Card>
+        <CardContent sx={{ textAlign: 'center', py: 8 }}>
+          <CalendarMonth sx={{ fontSize: 64, color: 'grey.400', mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            {statusFilter === 'all'
+              ? isLender
+                ? 'No reservation requests yet'
+                : "You haven't made any reservations yet"
+              : `No ${filterLabel.toLowerCase()} reservations`}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {statusFilter === 'all'
+              ? isLender
+                ? 'When someone requests to borrow your tools, they will appear here.'
+                : 'Browse available tools and make a reservation to get started.'
+              : `You don't have any reservations with "${filterLabel.toLowerCase()}" status.`}
+          </Typography>
+          {!isLender && statusFilter === 'all' && (
+            <Button
+              variant="outlined"
+              startIcon={<Search />}
+              onClick={() => navigate('/browse')}
+            >
+              Browse Tools
+            </Button>
+          )}
+          {statusFilter !== 'all' && (
+            <Button
+              variant="outlined"
+              startIcon={<FilterList />}
+              onClick={() => setStatusFilter('all')}
+            >
+              Show All Reservations
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  const renderReservationList = (reservations: Reservation[], isLender: boolean) => {
+    if (reservations.length === 0) {
+      return renderEmptyState(isLender);
+    }
+
+    return (
+      <Box>
+        {reservations.map((reservation) => (
+          <ReservationCard
+            key={reservation.id}
+            reservation={reservation}
+            isLender={isLender}
+            onAction={handleAction}
+          />
+        ))}
+      </Box>
     );
   };
 
@@ -441,9 +300,10 @@ export default function MyReservations() {
         <Typography variant="h4" gutterBottom>
           Reservations
         </Typography>
-        <Skeleton variant="rectangular" height={48} sx={{ mb: 3 }} />
+        <Skeleton variant="rectangular" height={48} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={40} sx={{ mb: 3 }} />
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} variant="rectangular" height={120} sx={{ mb: 2 }} />
+          <Skeleton key={i} variant="rectangular" height={140} sx={{ mb: 2, borderRadius: 1 }} />
         ))}
       </Box>
     );
@@ -471,18 +331,22 @@ export default function MyReservations() {
         Reservations
       </Typography>
 
+      {/* Borrowing/Lending Tabs */}
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v)}
-        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+        onChange={(_, v) => {
+          setTab(v);
+          setStatusFilter('all'); // Reset filter when switching tabs
+        }}
+        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
       >
         <Tab
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>Borrowing</span>
-              {groupedBorrowerReservations.pending.length > 0 && (
+              {borrowerPendingCount > 0 && (
                 <Chip
-                  label={groupedBorrowerReservations.pending.length}
+                  label={borrowerPendingCount}
                   size="small"
                   color="warning"
                 />
@@ -494,9 +358,9 @@ export default function MyReservations() {
           label={
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <span>Lending</span>
-              {groupedLenderReservations.pending.length > 0 && (
+              {lenderPendingCount > 0 && (
                 <Chip
-                  label={groupedLenderReservations.pending.length}
+                  label={lenderPendingCount}
                   size="small"
                   color="warning"
                 />
@@ -506,9 +370,38 @@ export default function MyReservations() {
         />
       </Tabs>
 
+      {/* Status Filter Chips */}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          mb: 3,
+          flexWrap: 'wrap',
+          gap: 1,
+          '& > *': { mb: { xs: 1, sm: 0 } },
+        }}
+      >
+        {STATUS_FILTERS.map((filter) => {
+          const count = statusCounts[filter.value];
+          const isSelected = statusFilter === filter.value;
+
+          return (
+            <Chip
+              key={filter.value}
+              label={`${filter.label}${count > 0 ? ` (${count})` : ''}`}
+              onClick={() => setStatusFilter(filter.value)}
+              color={isSelected ? 'primary' : 'default'}
+              variant={isSelected ? 'filled' : 'outlined'}
+              sx={{ cursor: 'pointer' }}
+            />
+          );
+        })}
+      </Stack>
+
+      {/* Reservation List */}
       {tab === 0
-        ? renderReservationList(borrowerReservations, false)
-        : renderReservationList(lenderReservations, true)}
+        ? renderReservationList(filteredBorrowerReservations, false)
+        : renderReservationList(filteredLenderReservations, true)}
 
       {/* Action Dialog */}
       <Dialog
@@ -530,13 +423,7 @@ export default function MyReservations() {
           {actionDialog.action === 'approve' && (
             <Alert severity="success" sx={{ mb: 2 }}>
               You are approving the reservation for{' '}
-              <strong>{actionDialog.reservation?.tool?.name}</strong> from{' '}
-              {actionDialog.reservation?.startDate &&
-                format(parseISO(actionDialog.reservation.startDate), 'MMM d')}{' '}
-              to{' '}
-              {actionDialog.reservation?.endDate &&
-                format(parseISO(actionDialog.reservation.endDate), 'MMM d, yyyy')}
-              .
+              <strong>{actionDialog.reservation?.tool?.name}</strong>.
             </Alert>
           )}
           {actionDialog.action === 'decline' && (

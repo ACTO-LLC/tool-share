@@ -111,6 +111,143 @@ describe('upcService', () => {
       expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 
+    describe('barcode format normalization', () => {
+      it('should pad 10-digit barcode to UPC-A (12 digits) and EAN-13 (13 digits)', async () => {
+        // First call (12-digit) fails
+        mockedAxios.get.mockResolvedValueOnce({
+          data: { code: 'OK', total: 0, items: [] },
+        });
+        // Second call (13-digit) succeeds
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [
+              {
+                ean: '0009317557847',
+                title: 'Australian Tool',
+                brand: 'ToolBrand',
+              },
+            ],
+          },
+        });
+
+        const result = await lookupUpc('9317557847');
+
+        expect(result.found).toBe(true);
+        expect(result.name).toBe('Australian Tool');
+        // Should have tried both formats
+        expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+        expect(mockedAxios.get).toHaveBeenNthCalledWith(
+          1,
+          expect.any(String),
+          expect.objectContaining({ params: { upc: '009317557847' } })
+        );
+        expect(mockedAxios.get).toHaveBeenNthCalledWith(
+          2,
+          expect.any(String),
+          expect.objectContaining({ params: { upc: '0009317557847' } })
+        );
+      });
+
+      it('should find product with first format if UPC-A format matches', async () => {
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [
+              {
+                ean: '009317557847',
+                title: 'Product Found',
+                brand: 'Brand',
+              },
+            ],
+          },
+        });
+
+        const result = await lookupUpc('9317557847');
+
+        expect(result.found).toBe(true);
+        expect(result.name).toBe('Product Found');
+        // Should only make one call since first format matched
+        expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      });
+
+      it('should handle standard 12-digit UPC-A without extra padding', async () => {
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [{ ean: '012345678901', title: 'Standard UPC' }],
+          },
+        });
+
+        const result = await lookupUpc('012345678901');
+
+        expect(result.found).toBe(true);
+        expect(mockedAxios.get).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ params: { upc: '012345678901' } })
+        );
+      });
+
+      it('should handle standard 13-digit EAN-13 without extra padding', async () => {
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [{ ean: '5901234123457', title: 'Standard EAN' }],
+          },
+        });
+
+        const result = await lookupUpc('5901234123457');
+
+        expect(result.found).toBe(true);
+        expect(mockedAxios.get).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ params: { upc: '5901234123457' } })
+        );
+      });
+
+      it('should handle 8-digit UPC-E/EAN-8 with fallback to padded formats', async () => {
+        // 8-digit code tries as-is first
+        mockedAxios.get.mockResolvedValueOnce({
+          data: { code: 'OK', total: 0, items: [] },
+        });
+        // Then tries 12-digit
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [{ ean: '000012345678', title: 'Padded Product' }],
+          },
+        });
+
+        const result = await lookupUpc('12345678');
+
+        expect(result.found).toBe(true);
+        expect(result.name).toBe('Padded Product');
+      });
+
+      it('should continue to next format if API errors on first format', async () => {
+        // First call errors
+        mockedAxios.get.mockRejectedValueOnce(new Error('Network error'));
+        // Second call succeeds
+        mockedAxios.get.mockResolvedValueOnce({
+          data: {
+            code: 'OK',
+            total: 1,
+            items: [{ ean: '0001234567890', title: 'Found After Error' }],
+          },
+        });
+
+        const result = await lookupUpc('1234567890');
+
+        expect(result.found).toBe(true);
+        expect(result.name).toBe('Found After Error');
+      });
+    });
+
     it('should handle API errors gracefully', async () => {
       mockedAxios.get.mockRejectedValueOnce(new Error('Network error'));
 

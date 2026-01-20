@@ -429,24 +429,94 @@ class DabClient {
     }));
 
     if (params.query) {
-      const searchTerms = params.query.toLowerCase().split(' ');
-      tools = tools.filter(tool => {
-        const searchableText = [
-          tool.name,
-          tool.description,
-          tool.brand,
-          tool.model,
-        ].filter(Boolean).join(' ').toLowerCase();
+      const searchTerms = params.query.toLowerCase().split(' ').filter(t => t.length > 0);
+      const queryLower = params.query.toLowerCase();
 
-        return searchTerms.every(term => searchableText.includes(term));
+      // Calculate relevance score for each tool
+      const toolsWithScores = tools.map(tool => {
+        const nameLower = tool.name?.toLowerCase() || '';
+        const brandLower = tool.brand?.toLowerCase() || '';
+        const modelLower = tool.model?.toLowerCase() || '';
+        const descLower = tool.description?.toLowerCase() || '';
+
+        let score = 0;
+
+        // Check if all search terms are found somewhere
+        const allSearchableText = [nameLower, brandLower, modelLower, descLower].join(' ');
+        const matchesAllTerms = searchTerms.every(term => allSearchableText.includes(term));
+
+        if (!matchesAllTerms) {
+          return { tool, score: -1 }; // Filter out
+        }
+
+        // Exact name match (highest priority)
+        if (nameLower === queryLower) {
+          score += 100;
+        }
+        // Name starts with query
+        else if (nameLower.startsWith(queryLower)) {
+          score += 80;
+        }
+        // Name contains all terms
+        else if (searchTerms.every(term => nameLower.includes(term))) {
+          score += 60;
+        }
+
+        // Brand/model matches
+        if (brandLower === queryLower || modelLower === queryLower) {
+          score += 40;
+        } else if (searchTerms.some(term => brandLower.includes(term) || modelLower.includes(term))) {
+          score += 20;
+        }
+
+        // Description matches (lower weight)
+        if (searchTerms.some(term => descLower.includes(term))) {
+          score += 10;
+        }
+
+        // Bonus for each matching term in name
+        for (const term of searchTerms) {
+          if (nameLower.includes(term)) score += 5;
+          if (brandLower.includes(term)) score += 3;
+          if (modelLower.includes(term)) score += 3;
+        }
+
+        return { tool, score };
       });
+
+      // Filter out non-matching tools and sort by relevance score
+      tools = toolsWithScores
+        .filter(ts => ts.score >= 0)
+        .sort((a, b) => b.score - a.score)
+        .map(ts => ts.tool);
+
+      // If sortBy is not 'relevance', apply the requested sort order
+      if (params.sortBy && params.sortBy !== 'relevance') {
+        if (params.sortBy === 'nameAsc') {
+          tools.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (params.sortBy === 'nameDesc') {
+          tools.sort((a, b) => b.name.localeCompare(a.name));
+        } else if (params.sortBy === 'dateAdded') {
+          tools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }
+      }
     }
 
-    // TODO: Circle filtering would require joining with toolCircles table
-    // For now, this would need to be done client-side or with a custom view
+    // Apply circle filtering if circleId is provided
+    if (params.circleId) {
+      const circleToolIds = await this.getCircleToolIds(params.circleId, authToken);
+      tools = tools.filter(tool => circleToolIds.has(tool.id));
+    }
 
-    // TODO: Availability filtering would require checking reservations
-    // Filter out tools with conflicting reservations in the date range
+    // Apply availability filtering if date range is provided
+    if (params.availableFrom && params.availableTo) {
+      const unavailableToolIds = await this.getUnavailableToolIds(
+        params.availableFrom,
+        params.availableTo,
+        authToken
+      );
+      tools = tools.filter(tool => !unavailableToolIds.has(tool.id));
+    }
 
     return {
       tools,
@@ -1077,6 +1147,75 @@ class DabClient {
         ...tc.tool,
         photos: tc.tool.photos?.items || [],
       }));
+  }
+
+  // ==================== AVAILABILITY FILTERING ====================
+
+  /**
+   * Get tool IDs that have conflicting reservations in the given date range.
+   * A tool is unavailable if it has a pending, confirmed, or active reservation
+   * that overlaps with the requested date range.
+   */
+  async getUnavailableToolIds(
+    availableFrom: string,
+    availableTo: string,
+    authToken?: string
+  ): Promise<Set<string>> {
+    const query = `
+      query GetConflictingReservations {
+        reservations(
+          filter: { status: { in: ["pending", "confirmed", "active"] } }
+          first: 1000
+        ) {
+          items {
+            toolId
+            startDate
+            endDate
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{
+      reservations: { items: Array<{ toolId: string; startDate: string; endDate: string }> };
+    }>(query, {}, authToken);
+
+    const unavailableToolIds = new Set<string>();
+    const requestedStart = new Date(availableFrom);
+    const requestedEnd = new Date(availableTo);
+
+    for (const reservation of result.reservations.items) {
+      const resStart = new Date(reservation.startDate);
+      const resEnd = new Date(reservation.endDate);
+
+      // Check for overlap: requested range starts before reservation ends AND requested range ends after reservation starts
+      if (requestedStart <= resEnd && requestedEnd >= resStart) {
+        unavailableToolIds.add(reservation.toolId);
+      }
+    }
+
+    return unavailableToolIds;
+  }
+
+  /**
+   * Get tool IDs that belong to a specific circle.
+   */
+  async getCircleToolIds(circleId: string, authToken?: string): Promise<Set<string>> {
+    const query = `
+      query GetCircleToolIds($circleId: UUID!) {
+        toolCircles(filter: { circleId: { eq: $circleId } }) {
+          items {
+            toolId
+          }
+        }
+      }
+    `;
+
+    const result = await this.query<{
+      toolCircles: { items: Array<{ toolId: string }> };
+    }>(query, { circleId }, authToken);
+
+    return new Set(result.toolCircles.items.map(tc => tc.toolId));
   }
 
   // ==================== CATEGORIES ====================

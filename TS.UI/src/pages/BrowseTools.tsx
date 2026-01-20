@@ -69,6 +69,7 @@ interface FilterState {
   q: string;
   category: string;
   circleId: string;
+  ownerId: string;
   sortBy: SortOption;
   availableFrom: Date | null;
   availableTo: Date | null;
@@ -95,6 +96,7 @@ export default function BrowseTools() {
       q: searchParams.get('q') || '',
       category: searchParams.get('category') || '',
       circleId: searchParams.get('circleId') || '',
+      ownerId: searchParams.get('ownerId') || '',
       sortBy: (searchParams.get('sortBy') as SortOption) || 'relevance',
       availableFrom: fromDate ? parseISO(fromDate) : null,
       availableTo: toDate ? parseISO(toDate) : null,
@@ -110,6 +112,7 @@ export default function BrowseTools() {
     if (filters.q) params.set('q', filters.q);
     if (filters.category) params.set('category', filters.category);
     if (filters.circleId) params.set('circleId', filters.circleId);
+    if (filters.ownerId) params.set('ownerId', filters.ownerId);
     if (filters.sortBy && filters.sortBy !== 'relevance') params.set('sortBy', filters.sortBy);
     if (filters.availableFrom && isValid(filters.availableFrom)) {
       params.set('availableFrom', format(filters.availableFrom, 'yyyy-MM-dd'));
@@ -141,6 +144,7 @@ export default function BrowseTools() {
         q: filters.q || undefined,
         category: filters.category || undefined,
         circleId: filters.circleId || undefined,
+        ownerId: filters.ownerId || undefined,
         sortBy: filters.sortBy,
         availableFrom: filters.availableFrom && isValid(filters.availableFrom)
           ? format(filters.availableFrom, 'yyyy-MM-dd')
@@ -220,6 +224,7 @@ export default function BrowseTools() {
     let count = 0;
     if (filters.category) count++;
     if (filters.circleId) count++;
+    if (filters.ownerId) count++;
     if (filters.availableFrom) count++;
     if (filters.availableTo) count++;
     if (filters.sortBy !== 'relevance') count++;
@@ -266,6 +271,7 @@ export default function BrowseTools() {
       q: filters.q, // Keep search query
       category: '',
       circleId: '',
+      ownerId: '',
       sortBy: 'relevance',
       availableFrom: null,
       availableTo: null,
@@ -278,6 +284,7 @@ export default function BrowseTools() {
       q: '',
       category: '',
       circleId: '',
+      ownerId: '',
       sortBy: 'relevance',
       availableFrom: null,
       availableTo: null,
@@ -317,6 +324,22 @@ export default function BrowseTools() {
           key="circle"
           label={`Circle: ${circle?.name || 'Unknown'}`}
           onDelete={() => removeFilter('circleId')}
+          size="small"
+          sx={{ minHeight: { xs: 32, sm: 24 } }}
+        />
+      );
+    }
+
+    if (filters.ownerId) {
+      // Get owner name from tools if available
+      const ownerName = tools.length > 0 && tools[0].owner?.displayName
+        ? tools[0].owner.displayName
+        : 'Owner';
+      chips.push(
+        <Chip
+          key="owner"
+          label={`Owner: ${ownerName}`}
+          onDelete={() => removeFilter('ownerId')}
           size="small"
           sx={{ minHeight: { xs: 32, sm: 24 } }}
         />

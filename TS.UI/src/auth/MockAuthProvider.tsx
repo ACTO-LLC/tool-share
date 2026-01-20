@@ -56,7 +56,9 @@ interface MockAuthProviderProps {
 }
 
 export function MockAuthProvider({ children }: MockAuthProviderProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Auto-login in E2E test mode when a real token is provided
+  const isE2EWithToken = import.meta.env.VITE_E2E_TEST === 'true' && import.meta.env.VITE_E2E_ACCESS_TOKEN;
+  const [isAuthenticated, setIsAuthenticated] = useState(isE2EWithToken ? true : false);
 
   const login = useCallback(() => {
     setIsAuthenticated(true);

@@ -234,8 +234,12 @@ cd TS.API && npm test
 # UI tests
 cd TS.UI && npm test
 
-# E2E tests
+# E2E tests (with mock auth)
 cd TS.UI && npm run test:e2e
+
+# E2E tests (with real service principal auth)
+cd TS.UI && npm run test:e2e:auth  # Acquire token first
+cd TS.UI && npm run test:e2e       # Run tests
 ```
 
 ### Test Requirements
@@ -243,6 +247,69 @@ cd TS.UI && npm run test:e2e
 - API: Unit tests for services, integration tests for controllers
 - UI: Component tests for complex components
 - E2E: Critical user flows (login, create tool, make reservation)
+
+### E2E Testing with Service Principal Authentication
+
+For automated E2E testing in CI/CD or local development, we use a **service principal with client credentials flow** to acquire tokens, which are mapped to a test user in the API.
+
+#### Prerequisites
+
+1. **Service Principal** configured in Azure AD with client secret
+2. **Test User** exists in the database with known `externalId`
+3. **API configured** with E2E test user mapping enabled
+
+#### Setup Steps
+
+1. **Configure API environment** (`TS.API/.env`):
+   ```env
+   E2E_TEST_USER_MAPPING_ENABLED=true
+   E2E_TEST_USER_ID=test-user-1        # User's externalId, NOT database ID
+   E2E_TEST_USER_EMAIL=test@example.com
+   E2E_TEST_USER_NAME=Test User
+   E2E_SERVICE_PRINCIPAL_CLIENT_ID=<your-app-client-id>
+   ```
+
+2. **Acquire E2E token**:
+   ```bash
+   cd TS.UI
+   npm run test:e2e:auth
+   ```
+   This creates `.env.e2e.local` with the access token.
+
+3. **Run E2E tests**:
+   ```bash
+   npm run test:e2e
+   ```
+
+#### How It Works
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Playwright     │────>│   TS.API         │────>│   DAB           │
+│  + Vite         │     │   (Auth Middleware)│     │   (Database)    │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+        │                        │
+        │ Bearer Token           │ App-only token detected
+        │ (Service Principal)    │ Maps to test user
+        ▼                        ▼
+┌─────────────────┐     ┌──────────────────┐
+│  Azure AD       │     │  Test User       │
+│  (token issuer) │     │  (in database)   │
+└─────────────────┘     └──────────────────┘
+```
+
+1. **Token acquisition**: Service principal gets app-only token via client credentials
+2. **Frontend bypass**: MockAuthProvider auto-logs in when E2E token present
+3. **API mapping**: Auth middleware detects app-only tokens and maps to test user
+4. **Database access**: All queries run as the test user
+
+#### Security Notes
+
+- E2E mapping **only works** when `E2E_TEST_USER_MAPPING_ENABLED=true`
+- Only tokens from the configured service principal are accepted
+- **Never enable in production**
+
+See [E2E_AUTH_SETUP.md](./E2E_AUTH_SETUP.md) for complete documentation.
 
 ---
 

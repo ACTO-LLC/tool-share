@@ -15,6 +15,15 @@ export const config = cleanEnv(process.env, {
   AZURE_AD_AUTH_DOMAIN: str({ default: '' }),
   AZURE_AD_TENANT_GUID: str({ default: '' }),
 
+  // E2E Testing - App-to-User mapping
+  // When enabled, app-only tokens (client credentials) are mapped to the test user
+  E2E_TEST_USER_MAPPING_ENABLED: str({ choices: ['true', 'false'], default: 'false' }),
+  E2E_TEST_USER_ID: str({ default: '' }),
+  E2E_TEST_USER_EMAIL: str({ default: 'e2e-test@example.com' }),
+  E2E_TEST_USER_NAME: str({ default: 'E2E Test User' }),
+  // The client ID of the service principal allowed to use test user mapping
+  E2E_SERVICE_PRINCIPAL_CLIENT_ID: str({ default: '' }),
+
   // Database (DAB)
   DAB_GRAPHQL_URL: url({ default: 'http://localhost:5000/graphql' }),
 

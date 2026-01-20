@@ -50,6 +50,38 @@ npm run test:e2e:debug    # Debug mode
 - Mock data for consistent test state
 - Separate spec files per feature/page
 
+### Authentication for E2E Tests
+
+E2E tests require authenticated API access. We support two modes:
+
+#### 1. Mock Auth (Default)
+- Frontend uses `MockAuthProvider` when `VITE_MOCK_AUTH=true`
+- No real tokens, uses mock user data
+- Fast, no external dependencies
+- Good for UI-only testing
+
+#### 2. Service Principal Auth (Recommended for Full E2E)
+- Uses Azure AD service principal with client credentials
+- Real tokens mapped to test user in API
+- Tests actual auth flow and API authorization
+- Required for CI/CD with real database
+
+**Setup:**
+```bash
+# 1. Acquire token (stored in .env.e2e.local)
+npm run test:e2e:auth
+
+# 2. Run tests
+npm run test:e2e
+```
+
+**Configuration:**
+- `TS.UI/.env.e2e` - Sets `VITE_E2E_TEST=true` and `VITE_MOCK_AUTH=true`
+- `TS.UI/.env.e2e.local` - Contains `VITE_E2E_ACCESS_TOKEN` (gitignored)
+- `TS.API/.env` - Configures `E2E_TEST_USER_MAPPING_ENABLED=true`
+
+See [E2E_AUTH_SETUP.md](../../E2E_AUTH_SETUP.md) for complete setup guide.
+
 ## Consequences
 
 ### Positive

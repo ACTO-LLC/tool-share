@@ -121,11 +121,10 @@ class DabClient {
     });
   }
 
-  private async query<T>(query: string, variables?: Record<string, unknown>, authToken?: string): Promise<T> {
+  private async query<T>(query: string, variables?: Record<string, unknown>, _authToken?: string): Promise<T> {
+    // Note: DAB runs without authentication - all auth is handled by TS.API
+    // The authToken parameter is kept for API compatibility but not passed to DAB
     const headers: Record<string, string> = {};
-    if (authToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
-    }
 
     try {
       const response = await this.client.post<GraphQLResponse<T>>(
@@ -142,11 +141,15 @@ class DabClient {
       return response.data.data;
     } catch (error) {
       if (error instanceof Error && 'response' in error) {
-        const axiosError = error as { response?: { status: number; data: unknown } };
+        const axiosError = error as { response?: { status: number; data: unknown; headers?: unknown } };
         console.error('[DAB] Request failed:', {
           status: axiosError.response?.status,
           data: JSON.stringify(axiosError.response?.data, null, 2),
+          headers: axiosError.response?.headers,
+          query: query.substring(0, 200),
         });
+      } else {
+        console.error('[DAB] Request error:', error);
       }
       throw error;
     }
@@ -190,7 +193,7 @@ class DabClient {
 
   async getUserById(id: string, authToken?: string): Promise<User | null> {
     const query = `
-      query GetUserById($id: ID!) {
+      query GetUserById($id: UUID!) {
         user_by_pk(id: $id) {
           id
           externalId
@@ -224,7 +227,7 @@ class DabClient {
 
   async getToolById(id: string, authToken?: string): Promise<Tool | null> {
     const query = `
-      query GetToolById($id: ID!) {
+      query GetToolById($id: UUID!) {
         tool_by_pk(id: $id) {
           id
           ownerId
@@ -280,7 +283,7 @@ class DabClient {
 
   async getToolsByOwner(ownerId: string, authToken?: string): Promise<Tool[]> {
     const query = `
-      query GetToolsByOwner($ownerId: ID!) {
+      query GetToolsByOwner($ownerId: UUID!) {
         tools(filter: { ownerId: { eq: $ownerId } }, orderBy: { createdAt: DESC }) {
           items {
             id
@@ -505,9 +508,22 @@ class DabClient {
   // ==================== TOOL MUTATIONS ====================
 
   async createTool(input: CreateToolInput, authToken?: string): Promise<Tool> {
+    // Note: Using inline values instead of variables due to DAB 1.7.x bug with UUID variable parsing
+    const escStr = (s?: string) => s ? `"${s.replace(/"/g, '\\"')}"` : 'null';
     const mutation = `
-      mutation CreateTool($item: CreateToolInput!) {
-        createTool(item: $item) {
+      mutation {
+        createTool(item: {
+          ownerId: "${input.ownerId}"
+          name: ${escStr(input.name)}
+          description: ${escStr(input.description)}
+          category: ${escStr(input.category)}
+          brand: ${escStr(input.brand)}
+          model: ${escStr(input.model)}
+          upc: ${escStr(input.upc)}
+          status: ${escStr(input.status)}
+          advanceNoticeDays: ${input.advanceNoticeDays ?? 'null'}
+          maxLoanDays: ${input.maxLoanDays ?? 'null'}
+        }) {
           id
           ownerId
           name
@@ -526,7 +542,7 @@ class DabClient {
 
     const result = await this.query<{ createTool: Tool }>(
       mutation,
-      { item: input },
+      undefined,
       authToken
     );
 
@@ -535,7 +551,7 @@ class DabClient {
 
   async updateTool(id: string, input: UpdateToolInput, authToken?: string): Promise<Tool> {
     const mutation = `
-      mutation UpdateTool($id: ID!, $item: UpdateToolInput!) {
+      mutation UpdateTool($id: UUID!, $item: UpdateToolInput!) {
         updateTool(id: $id, item: $item) {
           id
           ownerId
@@ -565,7 +581,7 @@ class DabClient {
   async deleteTool(id: string, authToken?: string): Promise<void> {
     // Soft delete by setting status to 'archived'
     const mutation = `
-      mutation ArchiveTool($id: ID!, $item: UpdateToolInput!) {
+      mutation ArchiveTool($id: UUID!, $item: UpdateToolInput!) {
         updateTool(id: $id, item: $item) {
           id
           status
@@ -606,7 +622,7 @@ class DabClient {
 
   async deleteToolPhoto(id: string, authToken?: string): Promise<void> {
     const mutation = `
-      mutation DeleteToolPhoto($id: ID!) {
+      mutation DeleteToolPhoto($id: UUID!) {
         deleteToolPhoto(id: $id) {
           id
         }
@@ -618,7 +634,7 @@ class DabClient {
 
   async getToolPhoto(id: string, authToken?: string): Promise<ToolPhoto | null> {
     const query = `
-      query GetToolPhoto($id: ID!) {
+      query GetToolPhoto($id: UUID!) {
         toolPhoto_by_pk(id: $id) {
           id
           toolId
@@ -641,7 +657,7 @@ class DabClient {
   async setToolPhotoPrimary(toolId: string, photoId: string, authToken?: string): Promise<void> {
     // First, unset all photos as non-primary
     const query = `
-      query GetToolPhotos($toolId: ID!) {
+      query GetToolPhotos($toolId: UUID!) {
         toolPhotos(filter: { toolId: { eq: $toolId } }) {
           items {
             id
@@ -660,7 +676,7 @@ class DabClient {
     // Update all photos to non-primary, then set the specified one as primary
     for (const photo of result.toolPhotos.items) {
       const mutation = `
-        mutation UpdateToolPhoto($id: ID!, $item: UpdateToolPhotoInput!) {
+        mutation UpdateToolPhoto($id: UUID!, $item: UpdateToolPhotoInput!) {
           updateToolPhoto(id: $id, item: $item) {
             id
             isPrimary
@@ -680,7 +696,7 @@ class DabClient {
 
   async getToolCircles(toolId: string, authToken?: string): Promise<Circle[]> {
     const query = `
-      query GetToolCircles($toolId: ID!) {
+      query GetToolCircles($toolId: UUID!) {
         toolCircles(filter: { toolId: { eq: $toolId } }) {
           items {
             id
@@ -727,7 +743,7 @@ class DabClient {
 
   async removeToolFromCircle(toolCircleId: string, authToken?: string): Promise<void> {
     const mutation = `
-      mutation RemoveToolFromCircle($id: ID!) {
+      mutation RemoveToolFromCircle($id: UUID!) {
         deleteToolCircle(id: $id) {
           id
         }
@@ -784,7 +800,7 @@ class DabClient {
 
   async getCircleById(id: string, authToken?: string): Promise<Circle | null> {
     const query = `
-      query GetCircle($id: ID!) {
+      query GetCircle($id: UUID!) {
         circle_by_pk(id: $id) {
           id
           name
@@ -837,7 +853,7 @@ class DabClient {
     authToken?: string
   ): Promise<Array<Circle & { memberCount: number; currentUserRole: 'member' | 'admin' | 'owner' }>> {
     const query = `
-      query GetCirclesByUser($userId: ID!) {
+      query GetCirclesByUser($userId: UUID!) {
         circleMembers(filter: { userId: { eq: $userId } }) {
           items {
             id
@@ -883,7 +899,7 @@ class DabClient {
     authToken?: string
   ): Promise<Array<CircleMember & { user?: User }>> {
     const query = `
-      query GetCircleMembers($circleId: ID!) {
+      query GetCircleMembers($circleId: UUID!) {
         circleMembers(filter: { circleId: { eq: $circleId } }) {
           items {
             id
@@ -916,7 +932,7 @@ class DabClient {
     authToken?: string
   ): Promise<CircleMember | null> {
     const query = `
-      query GetCircleMembership($circleId: ID!, $userId: ID!) {
+      query GetCircleMembership($circleId: UUID!, $userId: UUID!) {
         circleMembers(filter: { circleId: { eq: $circleId }, userId: { eq: $userId } }) {
           items {
             id
@@ -981,7 +997,7 @@ class DabClient {
     authToken?: string
   ): Promise<CircleMember> {
     const mutation = `
-      mutation UpdateCircleMember($id: ID!, $item: UpdateCircleMemberInput!) {
+      mutation UpdateCircleMember($id: UUID!, $item: UpdateCircleMemberInput!) {
         updateCircleMember(id: $id, item: $item) {
           id
           circleId
@@ -1003,7 +1019,7 @@ class DabClient {
 
   async deleteCircleMember(id: string, authToken?: string): Promise<void> {
     const mutation = `
-      mutation DeleteCircleMember($id: ID!) {
+      mutation DeleteCircleMember($id: UUID!) {
         deleteCircleMember(id: $id) {
           id
         }
@@ -1015,7 +1031,7 @@ class DabClient {
 
   async getCircleTools(circleId: string, authToken?: string): Promise<Tool[]> {
     const query = `
-      query GetCircleTools($circleId: ID!) {
+      query GetCircleTools($circleId: UUID!) {
         toolCircles(filter: { circleId: { eq: $circleId } }) {
           items {
             id

@@ -59,8 +59,13 @@ function getActiveAccount() {
  * Acquire an access token for API calls using MSAL
  */
 async function getAuthToken(): Promise<string | null> {
-  // In E2E test mode, return a mock token
+  // In E2E test mode, use provided access token or fall back to mock
   if (import.meta.env.VITE_E2E_TEST === 'true') {
+    // If a real access token is provided via env var, use it
+    const e2eToken = import.meta.env.VITE_E2E_ACCESS_TOKEN;
+    if (e2eToken) {
+      return e2eToken;
+    }
     return 'mock-e2e-token';
   }
 

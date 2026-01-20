@@ -272,11 +272,21 @@ export class ToolsController extends Controller {
     @Request() request: ExpressRequest,
     @Body() body: CreateToolRequest
   ): Promise<ToolResponse> {
+    console.log('[CreateTool] Starting...');
     const user = request.user as AuthenticatedUser;
+    console.log('[CreateTool] User:', user);
     const authToken = this.getAuthToken(request);
 
     // Get the user's internal ID from their external ID
-    const dbUser = await dabClient.getUserByExternalId(user.id, authToken);
+    console.log('[CreateTool] Getting user by externalId:', user.id);
+    let dbUser;
+    try {
+      dbUser = await dabClient.getUserByExternalId(user.id, authToken);
+      console.log('[CreateTool] dbUser:', dbUser);
+    } catch (err) {
+      console.error('[CreateTool] Error getting user:', err);
+      throw err;
+    }
     if (!dbUser) {
       this.setStatus(401);
       throw new Error('User not found');
@@ -294,8 +304,16 @@ export class ToolsController extends Controller {
       advanceNoticeDays: body.advanceNoticeDays ?? 1,
       maxLoanDays: body.maxLoanDays ?? 7,
     };
+    console.log('[CreateTool] Input:', input);
 
-    const tool = await dabClient.createTool(input, authToken);
+    let tool;
+    try {
+      tool = await dabClient.createTool(input, authToken);
+      console.log('[CreateTool] Created tool:', tool);
+    } catch (err) {
+      console.error('[CreateTool] Error creating tool:', err);
+      throw err;
+    }
 
     // Add to circles if specified
     if (body.circleIds && body.circleIds.length > 0) {

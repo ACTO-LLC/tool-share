@@ -27,55 +27,68 @@ interface AzureB2CTokenClaims extends JwtPayload {
   given_name?: string;
   family_name?: string;
   tfp?: string; // Policy name
+  // Additional claims for app-only token detection
+  azp?: string; // Authorized party (client ID that requested the token)
+  appid?: string; // Application ID (for v1 tokens)
+  idtyp?: string; // Token type ('app' for app-only tokens)
 }
 
-// Cache the JWKS client to avoid recreating it on every request
-let jwksClientInstance: jwksClient.JwksClient | null = null;
-
-// Track which JWKS URI is currently in use
-let currentJwksUri: string | null = null;
+// Cache the JWKS clients to avoid recreating them on every request
+const jwksClients: Map<string, jwksClient.JwksClient> = new Map();
 
 /**
- * Get or create the JWKS client for Azure AD B2C / Entra External ID
+ * Get or create a JWKS client for a given URI
  */
-function getJwksClient(): jwksClient.JwksClient {
-  const tenantName = config.AZURE_AD_B2C_TENANT_ID || 'YOUR_TENANT';
-  const authDomain = config.AZURE_AD_AUTH_DOMAIN;
-  const policyName = config.AZURE_AD_B2C_POLICY_NAME;
-  const tenantGuid = config.AZURE_AD_TENANT_GUID;
-
-  let jwksUri: string;
-  if (authDomain && authDomain.includes('ciamlogin.com') && tenantGuid) {
-    // Entra External ID (CIAM) JWKS URI format - uses tenant GUID as subdomain
-    jwksUri = `https://${tenantGuid}.ciamlogin.com/${tenantGuid}/discovery/v2.0/keys`;
-  } else if (policyName) {
-    // Legacy Azure AD B2C JWKS URI format
-    jwksUri = `https://${tenantName}.b2clogin.com/${tenantName}.onmicrosoft.com/${policyName}/discovery/v2.0/keys`;
-  } else {
-    // Entra External ID without explicit domain
-    jwksUri = `https://${tenantName}.ciamlogin.com/${tenantName}.onmicrosoft.com/discovery/v2.0/keys`;
-  }
-
-  // Recreate client if URI changed or not created yet
-  if (!jwksClientInstance || currentJwksUri !== jwksUri) {
-    currentJwksUri = jwksUri;
-    jwksClientInstance = jwksClient({
+function getJwksClientForUri(jwksUri: string): jwksClient.JwksClient {
+  let client = jwksClients.get(jwksUri);
+  if (!client) {
+    client = jwksClient({
       jwksUri,
       cache: true,
       cacheMaxAge: 600000, // 10 minutes
       rateLimit: true,
       jwksRequestsPerMinute: 10,
     });
+    jwksClients.set(jwksUri, client);
   }
-  return jwksClientInstance;
+  return client;
 }
 
 /**
- * Get the signing key from JWKS endpoint
+ * Get JWKS URI for user tokens (CIAM/B2C)
  */
-function getSigningKey(header: jwt.JwtHeader): Promise<string> {
+function getUserTokenJwksUri(): string {
+  const tenantName = config.AZURE_AD_B2C_TENANT_ID || 'YOUR_TENANT';
+  const authDomain = config.AZURE_AD_AUTH_DOMAIN;
+  const policyName = config.AZURE_AD_B2C_POLICY_NAME;
+  const tenantGuid = config.AZURE_AD_TENANT_GUID;
+
+  if (authDomain && authDomain.includes('ciamlogin.com') && tenantGuid) {
+    // Entra External ID (CIAM) JWKS URI format - uses tenant GUID as subdomain
+    return `https://${tenantGuid}.ciamlogin.com/${tenantGuid}/discovery/v2.0/keys`;
+  } else if (policyName) {
+    // Legacy Azure AD B2C JWKS URI format
+    return `https://${tenantName}.b2clogin.com/${tenantName}.onmicrosoft.com/${policyName}/discovery/v2.0/keys`;
+  } else {
+    // Entra External ID without explicit domain
+    return `https://${tenantName}.ciamlogin.com/${tenantName}.onmicrosoft.com/discovery/v2.0/keys`;
+  }
+}
+
+/**
+ * Get JWKS URI for app-only tokens (Azure AD - used for E2E testing)
+ */
+function getAppTokenJwksUri(): string {
+  const tenantGuid = config.AZURE_AD_TENANT_GUID || config.AZURE_AD_B2C_TENANT_ID;
+  return `https://login.microsoftonline.com/${tenantGuid}/discovery/v2.0/keys`;
+}
+
+/**
+ * Get the signing key from a specific JWKS endpoint
+ */
+function getSigningKey(header: jwt.JwtHeader, jwksUri: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const client = getJwksClient();
+    const client = getJwksClientForUri(jwksUri);
     client.getSigningKey(header.kid, (err, key) => {
       if (err) {
         console.error('[Auth] JWKS key fetch error:', err.message);
@@ -93,7 +106,61 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
 }
 
 /**
- * Verify JWT token against Azure AD B2C
+ * Check if a token is an app-only token (client credentials flow)
+ * App-only tokens have azp === aud and no user-specific claims
+ */
+function isAppOnlyToken(claims: AzureB2CTokenClaims): boolean {
+  // App-only tokens: azp equals aud, oid equals sub, no email/name claims
+  const azpEqualsAud = claims.azp === claims.aud;
+  const oidEqualsSub = claims.oid === claims.sub;
+  const noEmail = !claims.email && (!claims.emails || claims.emails.length === 0);
+  const noName = !claims.name && !claims.given_name && !claims.family_name;
+
+  return azpEqualsAud && oidEqualsSub && noEmail && noName;
+}
+
+/**
+ * Verify an app-only token (client credentials flow) for E2E testing
+ */
+async function verifyAppToken(token: string): Promise<AzureB2CTokenClaims> {
+  const clientId = config.AZURE_AD_B2C_CLIENT_ID;
+  const tenantGuid = config.AZURE_AD_TENANT_GUID || config.AZURE_AD_B2C_TENANT_ID;
+
+  const decodedHeader = jwt.decode(token, { complete: true });
+  if (!decodedHeader || !decodedHeader.header) {
+    throw new Error('Invalid token format');
+  }
+
+  const jwksUri = getAppTokenJwksUri();
+  const signingKey = await getSigningKey(decodedHeader.header, jwksUri);
+
+  // App tokens use login.microsoftonline.com issuer
+  const issuers = [
+    `https://login.microsoftonline.com/${tenantGuid}/v2.0`,
+    `https://login.microsoftonline.com/${tenantGuid}/v2.0/`,
+  ];
+
+  const verifyOptions: VerifyOptions = {
+    algorithms: ['RS256'],
+    audience: clientId,
+    issuer: issuers as [string, ...string[]],
+  };
+
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, signingKey, verifyOptions, (err, decoded) => {
+      if (err) {
+        console.error('[Auth] App token verify error:', err.message);
+        reject(new Error(`App token verification failed: ${err.message}`));
+        return;
+      }
+      console.log('[Auth] App token verified for service principal:', (decoded as AzureB2CTokenClaims)?.oid);
+      resolve(decoded as AzureB2CTokenClaims);
+    });
+  });
+}
+
+/**
+ * Verify JWT token against Azure AD B2C / Entra External ID
  * In development mode (no tenant configured), falls back to decode-only
  */
 async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
@@ -112,12 +179,6 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
     return decoded;
   }
 
-  // Production mode: full JWT verification
-  const decodedHeader = jwt.decode(token, { complete: true });
-  if (!decodedHeader || !decodedHeader.header) {
-    throw new Error('Invalid token format');
-  }
-
   // Decode token to see actual claims for debugging
   const tokenPayload = jwt.decode(token) as AzureB2CTokenClaims | null;
   console.log('[Auth] Token claims:', {
@@ -125,14 +186,31 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
     aud: tokenPayload?.aud,
     sub: tokenPayload?.sub,
     oid: tokenPayload?.oid,
+    azp: tokenPayload?.azp,
     exp: tokenPayload?.exp ? new Date(tokenPayload.exp * 1000).toISOString() : undefined,
   });
 
-  const signingKey = await getSigningKey(decodedHeader.header);
+  // Check if this might be an E2E app-only token (from login.microsoftonline.com)
+  const tenantGuid = config.AZURE_AD_TENANT_GUID || tenantId;
+  const isE2EEnabled = config.E2E_TEST_USER_MAPPING_ENABLED === 'true';
+  const isAppIssuer = tokenPayload?.iss?.includes('login.microsoftonline.com');
+
+  if (isE2EEnabled && isAppIssuer) {
+    console.log('[Auth] Detected app-only token, attempting E2E verification...');
+    return verifyAppToken(token);
+  }
+
+  // Production mode: full JWT verification for user tokens
+  const decodedHeader = jwt.decode(token, { complete: true });
+  if (!decodedHeader || !decodedHeader.header) {
+    throw new Error('Invalid token format');
+  }
+
+  const jwksUri = getUserTokenJwksUri();
+  const signingKey = await getSigningKey(decodedHeader.header, jwksUri);
 
   // Determine issuer based on auth domain
   const authDomain = config.AZURE_AD_AUTH_DOMAIN;
-  const tenantGuid = config.AZURE_AD_TENANT_GUID || tenantId;
   let issuers: string[];
   if (authDomain && authDomain.includes('ciamlogin.com')) {
     // Entra External ID issuer format
@@ -207,6 +285,30 @@ export async function expressAuthentication(
 
     if (!decoded) {
       throw new Error('Invalid token');
+    }
+
+    // E2E Test User Mapping: Map app-only tokens to a configured test user
+    if (isAppOnlyToken(decoded) && config.E2E_TEST_USER_MAPPING_ENABLED === 'true') {
+      const allowedClientId = config.E2E_SERVICE_PRINCIPAL_CLIENT_ID;
+      const tokenClientId = decoded.azp || decoded.appid;
+
+      // Verify the token is from the allowed service principal (if configured)
+      if (allowedClientId && tokenClientId !== allowedClientId) {
+        console.warn('[Auth] E2E mapping rejected: token client ID does not match allowed service principal');
+        throw new Error('App-only token not authorized for E2E test user mapping');
+      }
+
+      const testUserId = config.E2E_TEST_USER_ID;
+      if (!testUserId) {
+        throw new Error('E2E_TEST_USER_ID not configured for test user mapping');
+      }
+
+      console.log('[Auth] E2E Test Mode: Mapping app-only token to test user:', testUserId);
+      return {
+        id: testUserId,
+        email: config.E2E_TEST_USER_EMAIL,
+        name: config.E2E_TEST_USER_NAME,
+      };
     }
 
     // Extract user information from token claims

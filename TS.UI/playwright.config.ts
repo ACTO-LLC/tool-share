@@ -1,4 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+
+// Load .env.e2e.local if it exists (contains the access token)
+if (fs.existsSync('.env.e2e.local')) {
+  dotenv.config({ path: '.env.e2e.local' });
+}
 
 export default defineConfig({
   testDir: './e2e',

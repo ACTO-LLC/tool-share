@@ -16,8 +16,8 @@ test.describe('Dashboard', () => {
     const main = page.getByRole('main');
     await expect(main.getByText('Tools Listed')).toBeVisible();
     await expect(main.getByText('Active Loans')).toBeVisible();
-    // Use first() since "Pending Requests" may appear both as stat label and section heading
-    await expect(main.locator('p').filter({ hasText: 'Pending Requests' }).first()).toBeVisible();
+    // The stat card label is "Pending" (not "Pending Requests")
+    await expect(main.getByText('Pending').first()).toBeVisible();
   });
 
   test('should display quick actions', async ({ page }) => {

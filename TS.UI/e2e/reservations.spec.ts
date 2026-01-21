@@ -95,10 +95,12 @@ test.describe('Reservations', () => {
     expect(badgeCount).toBeGreaterThanOrEqual(0);
   });
 
-  test('should group reservations by status', async ({ page }) => {
-    // Check for section headers
-    const sections = page.getByRole('heading', { level: 6 });
-    const sectionCount = await sections.count();
-    expect(sectionCount).toBeGreaterThanOrEqual(1);
+  test('should display status filter chips', async ({ page }) => {
+    // Check for status filter chips (All, Pending, Confirmed, Active, etc.)
+    await expect(page.getByRole('button', { name: /all/i }).first()).toBeVisible();
+    // At least one filter option should be visible
+    const filterChips = page.locator('.MuiChip-root');
+    const chipCount = await filterChips.count();
+    expect(chipCount).toBeGreaterThanOrEqual(1);
   });
 });

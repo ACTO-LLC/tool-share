@@ -106,3 +106,4 @@ tsoa-routes.ts
 client-*
 iac/tenant-info.json
 iac/*-config-*.json
+.mcp.json

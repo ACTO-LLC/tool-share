@@ -24,6 +24,7 @@ class BlobStorageService {
   private containerClient: ContainerClient | null = null;
   private accountName: string = '';
   private accountKey: string = '';
+  private blobEndpoint: string = '';
 
   private initialize(): ContainerClient {
     if (this.containerClient) {
@@ -46,6 +47,8 @@ class BlobStorageService {
 
     this.accountName = parts['AccountName'] || '';
     this.accountKey = parts['AccountKey'] || '';
+    // BlobEndpoint is specified for Azurite local development
+    this.blobEndpoint = parts['BlobEndpoint'] || '';
 
     const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
     this.containerClient = blobServiceClient.getContainerClient(config.AZURE_STORAGE_CONTAINER_NAME);
@@ -135,7 +138,17 @@ class BlobStorageService {
       sharedKeyCredential
     ).toString();
 
-    const url = `https://${this.accountName}.blob.core.windows.net/${config.AZURE_STORAGE_CONTAINER_NAME}/${blobName}?${sasToken}`;
+    // Use BlobEndpoint if specified (for Azurite local development)
+    // Otherwise use the standard Azure cloud URL format
+    let baseUrl: string;
+    if (this.blobEndpoint) {
+      // BlobEndpoint already includes the account name, e.g., http://127.0.0.1:10000/devstoreaccount1
+      baseUrl = `${this.blobEndpoint}/${config.AZURE_STORAGE_CONTAINER_NAME}/${blobName}`;
+    } else {
+      baseUrl = `https://${this.accountName}.blob.core.windows.net/${config.AZURE_STORAGE_CONTAINER_NAME}/${blobName}`;
+    }
+
+    const url = `${baseUrl}?${sasToken}`;
 
     return {
       url,

@@ -931,10 +931,10 @@ export function RegisterRoutes(app: Router,opts?:{multer?:ReturnType<typeof mult
         const argsToolsController_browseTools: Record<string, TsoaRoute.ParameterSchema> = {
                 request: {"in":"request","name":"request","required":true,"dataType":"object"},
                 category: {"in":"query","name":"category","dataType":"string"},
-                _circleId: {"in":"query","name":"_circleId","dataType":"string"},
+                circleId: {"in":"query","name":"circleId","dataType":"string"},
                 ownerId: {"in":"query","name":"ownerId","dataType":"string"},
-                _availableFrom: {"in":"query","name":"_availableFrom","dataType":"string"},
-                _availableTo: {"in":"query","name":"_availableTo","dataType":"string"},
+                availableFrom: {"in":"query","name":"availableFrom","dataType":"string"},
+                availableTo: {"in":"query","name":"availableTo","dataType":"string"},
                 sortBy: {"in":"query","name":"sortBy","dataType":"union","subSchemas":[{"dataType":"enum","enums":["relevance"]},{"dataType":"enum","enums":["dateAdded"]},{"dataType":"enum","enums":["nameAsc"]},{"dataType":"enum","enums":["nameDesc"]}]},
                 page: {"in":"query","name":"page","dataType":"double"},
                 pageSize: {"in":"query","name":"pageSize","dataType":"double"},

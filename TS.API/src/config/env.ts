@@ -25,7 +25,7 @@ export const config = cleanEnv(process.env, {
   E2E_SERVICE_PRINCIPAL_CLIENT_ID: str({ default: '' }),
 
   // Database (DAB)
-  DAB_GRAPHQL_URL: url({ default: 'http://localhost:5000/graphql' }),
+  DAB_GRAPHQL_URL: url({ default: 'http://localhost:5001/graphql' }),
 
   // Blob Storage
   AZURE_STORAGE_CONNECTION_STRING: str({ default: '' }),

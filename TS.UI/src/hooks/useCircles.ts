@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { circlesApi, Circle, CircleDetail, CreateCircleRequest } from '../services/api';
+import { circlesApi, Circle, CreateCircleRequest } from '../services/api';
 
 /**
  * Query key for circles list

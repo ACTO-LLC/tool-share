@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Profile from '../Profile';
-import { renderWithProviders, createTestQueryClient } from '../../test/utils';
+import { renderWithProviders } from '../../test/utils';
 import { userApi, UserProfile } from '../../services/api';
 
 // Mock the API module

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Card,
@@ -55,6 +55,9 @@ import { Tool as MockTool } from '../types';
 // Flag to enable/disable mock data fallback
 const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
+// Debounce delay in milliseconds
+const SEARCH_DEBOUNCE_DELAY = 300;
+
 // Sort options
 const SORT_OPTIONS = [
   { value: 'relevance', label: 'Relevance' },
@@ -105,6 +108,33 @@ export default function BrowseTools() {
 
   const [filters, setFilters] = useState<FilterState>(getInitialFilters);
   const [tempFilters, setTempFilters] = useState<FilterState>(filters);
+
+  // Debounced search: separate state for input value and debounced filter value
+  const [searchInputValue, setSearchInputValue] = useState(filters.q);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Update debounced search filter when input changes
+  useEffect(() => {
+    // Clear any existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Set a new timer to update the actual filter
+    debounceTimerRef.current = setTimeout(() => {
+      if (searchInputValue !== filters.q) {
+        setFilters(prev => ({ ...prev, q: searchInputValue }));
+        setPage(1);
+      }
+    }, SEARCH_DEBOUNCE_DELAY);
+
+    // Cleanup on unmount
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchInputValue, filters.q]);
 
   // Sync URL params when filters change
   useEffect(() => {
@@ -219,10 +249,10 @@ export default function BrowseTools() {
   const total = shouldUseMock ? tools.length : (apiResponse?.total || 0);
   const totalPages = Math.ceil(total / pageSize);
 
-  // Count active filters for badge
+  // Count active filters for badge (excludes category since it has its own chip row)
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.category) count++;
+    // Note: category is excluded since it's visible in the dedicated category chips row
     if (filters.circleId) count++;
     if (filters.ownerId) count++;
     if (filters.availableFrom) count++;
@@ -246,8 +276,9 @@ export default function BrowseTools() {
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFilters(prev => ({ ...prev, q: e.target.value }));
-    setPage(1);
+    // Update input value immediately (for responsive UI)
+    setSearchInputValue(e.target.value);
+    // The actual filter update is debounced via useEffect
   };
 
   const handleSortChange = (sortBy: SortOption) => {
@@ -289,6 +320,7 @@ export default function BrowseTools() {
       availableFrom: null,
       availableTo: null,
     };
+    setSearchInputValue('');
     setFilters(clearedFilters);
     setPage(1);
   };
@@ -301,21 +333,11 @@ export default function BrowseTools() {
     setPage(1);
   };
 
-  // Filter chips for active filters
+  // Filter chips for active filters (excluding category which has its own chip row)
   const renderFilterChips = () => {
     const chips: JSX.Element[] = [];
 
-    if (filters.category) {
-      chips.push(
-        <Chip
-          key="category"
-          label={`Category: ${filters.category}`}
-          onDelete={() => removeFilter('category')}
-          size="small"
-          sx={{ minHeight: { xs: 32, sm: 24 } }}
-        />
-      );
-    }
+    // Category is now shown in dedicated chip row above, so we skip it here
 
     if (filters.circleId && circles) {
       const circle = circles.find(c => c.id === filters.circleId);
@@ -517,7 +539,7 @@ export default function BrowseTools() {
             <TextField
               fullWidth
               placeholder="Search tools..."
-              value={filters.q}
+              value={searchInputValue}
               onChange={handleSearchChange}
               InputProps={{
                 startAdornment: (
@@ -525,11 +547,12 @@ export default function BrowseTools() {
                     <Search />
                   </InputAdornment>
                 ),
-                endAdornment: filters.q ? (
+                endAdornment: searchInputValue ? (
                   <InputAdornment position="end">
                     <IconButton
                       size="small"
                       onClick={() => {
+                        setSearchInputValue('');
                         setFilters(prev => ({ ...prev, q: '' }));
                         setPage(1);
                       }}
@@ -633,6 +656,44 @@ export default function BrowseTools() {
         </Grid>
       </Box>
 
+      {/* Category Chips for quick filtering */}
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 1,
+          overflowX: 'auto',
+          pb: 1,
+          '&::-webkit-scrollbar': { height: 4 },
+          '&::-webkit-scrollbar-thumb': { bgcolor: 'grey.300', borderRadius: 2 },
+        }}
+      >
+        <Chip
+          label="All"
+          onClick={() => {
+            setFilters(prev => ({ ...prev, category: '' }));
+            setPage(1);
+          }}
+          color={!filters.category ? 'primary' : 'default'}
+          variant={!filters.category ? 'filled' : 'outlined'}
+          sx={{ minHeight: { xs: 32, sm: 32 } }}
+        />
+        {TOOL_CATEGORIES.map((cat) => (
+          <Chip
+            key={cat}
+            label={cat}
+            onClick={() => {
+              setFilters(prev => ({ ...prev, category: cat }));
+              setPage(1);
+            }}
+            color={filters.category === cat ? 'primary' : 'default'}
+            variant={filters.category === cat ? 'filled' : 'outlined'}
+            sx={{ minHeight: { xs: 32, sm: 32 } }}
+          />
+        ))}
+      </Box>
+
       {/* Active Filter Chips */}
       {(activeFilterCount > 0 || filters.q) && (
         <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
@@ -640,6 +701,7 @@ export default function BrowseTools() {
             <Chip
               label={`Search: "${filters.q}"`}
               onDelete={() => {
+                setSearchInputValue('');
                 setFilters(prev => ({ ...prev, q: '' }));
                 setPage(1);
               }}

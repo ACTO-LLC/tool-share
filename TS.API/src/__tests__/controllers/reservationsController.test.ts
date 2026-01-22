@@ -108,6 +108,7 @@ describe('ReservationsController', () => {
 
       mockedDabService.getToolById.mockResolvedValueOnce(mockTool as any);
       mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockUser as any);
+      mockedDabService.userSharesCircleWithTool.mockResolvedValueOnce(true);
       mockedDabService.checkDateConflicts.mockResolvedValueOnce(false);
       mockedDabService.createReservation.mockResolvedValueOnce(mockReservation as any);
       mockedNotificationService.notifyReservationRequest.mockResolvedValueOnce(undefined);
@@ -195,12 +196,32 @@ describe('ReservationsController', () => {
       ).rejects.toThrow('You cannot reserve your own tool');
     });
 
+    it('should reject reservation if user does not share a circle with tool', async () => {
+      const mockUser = createMockUser({ id: 'borrower-123' });
+      const mockTool = createMockTool();
+
+      mockedDabService.getToolById.mockResolvedValueOnce(mockTool as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockUser as any);
+      mockedDabService.userSharesCircleWithTool.mockResolvedValueOnce(false);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.createReservation(request, {
+          toolId: 'tool-123',
+          startDate: '2024-06-20',
+          endDate: '2024-06-25',
+        })
+      ).rejects.toThrow('You can only request tools from circles you are a member of');
+    });
+
     it('should enforce advance notice requirement', async () => {
       const mockUser = createMockUser({ id: 'borrower-123' });
       const mockTool = createMockTool({ advanceNoticeDays: 7 }); // Requires 7 days notice
 
       mockedDabService.getToolById.mockResolvedValueOnce(mockTool as any);
       mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockUser as any);
+      mockedDabService.userSharesCircleWithTool.mockResolvedValueOnce(true);
 
       const request = createMockRequest();
 
@@ -219,6 +240,7 @@ describe('ReservationsController', () => {
 
       mockedDabService.getToolById.mockResolvedValueOnce(mockTool as any);
       mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockUser as any);
+      mockedDabService.userSharesCircleWithTool.mockResolvedValueOnce(true);
 
       const request = createMockRequest();
 
@@ -237,6 +259,7 @@ describe('ReservationsController', () => {
 
       mockedDabService.getToolById.mockResolvedValueOnce(mockTool as any);
       mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockUser as any);
+      mockedDabService.userSharesCircleWithTool.mockResolvedValueOnce(true);
       mockedDabService.checkDateConflicts.mockResolvedValueOnce(true);
 
       const request = createMockRequest();

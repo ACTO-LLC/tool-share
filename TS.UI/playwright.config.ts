@@ -1,11 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load .env.e2e.local if it exists (contains the access token)
 if (fs.existsSync('.env.e2e.local')) {
   dotenv.config({ path: '.env.e2e.local' });
 }
+
+const authFile = join(__dirname, 'playwright/.auth/user.json');
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,21 +30,44 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
+    // Auth setup project - runs first
+    {
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    // Main browser projects - depend on setup
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Use saved auth state
+        storageState: authFile,
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      use: {
+        ...devices['Desktop Firefox'],
+        storageState: authFile,
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
+      use: {
+        ...devices['Desktop Safari'],
+        storageState: authFile,
+      },
+      dependencies: ['setup'],
     },
     {
       name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
+      use: {
+        ...devices['Pixel 5'],
+        storageState: authFile,
+      },
+      dependencies: ['setup'],
     },
   ],
   webServer: {

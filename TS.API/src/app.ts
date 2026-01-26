@@ -135,9 +135,35 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       });
     }
 
-    console.error(`Error: ${err.message}`);
+    // Check for business logic errors (400) - these should return the error message
+    const businessErrorPatterns = [
+      'Cannot ',
+      'Only the ',
+      'cannot be',
+      'must be',
+      'already ',
+      'Invalid ',
+      'You cannot',
+      'User not found',
+    ];
+    const isBusinessError = businessErrorPatterns.some(pattern => err.message.includes(pattern));
+    if (isBusinessError) {
+      console.warn(`[Business Logic] Bad Request: ${err.message}`);
+      return res.status(400).json({
+        message: 'Bad Request',
+        error: err.message,
+      });
+    }
+
+    // Log the full error for debugging
+    console.error(`[Error] ${err.message}`);
+    console.error(err.stack);
+
+    // In development, return the actual error message for debugging
+    const isDev = config.NODE_ENV === 'development';
     return res.status(500).json({
       message: 'Internal Server Error',
+      ...(isDev && { error: err.message }),
     });
   }
 

@@ -157,7 +157,7 @@ export async function getUserByExternalId(externalId: string, authToken?: string
  */
 export async function getUserById(id: string, authToken?: string): Promise<User | null> {
   const query = `
-    query GetUser($id: ID!) {
+    query GetUser($id: UUID!) {
       user_by_pk(id: $id) {
         id
         externalId
@@ -263,7 +263,7 @@ export async function updateUser(
   authToken?: string
 ): Promise<User> {
   const query = `
-    mutation UpdateUser($id: ID!, $item: UpdateUserInput!) {
+    mutation UpdateUser($id: UUID!, $item: UpdateUserInput!) {
       updateUser(id: $id, item: $item) {
         id
         externalId
@@ -334,7 +334,7 @@ export async function getOrCreateUser(
 // Tool operations
 export async function getToolById(toolId: string, authToken?: string): Promise<Tool | null> {
   const query = `
-    query GetTool($id: ID!) {
+    query GetTool($id: UUID!) {
       tool_by_pk(id: $id) {
         id
         ownerId
@@ -380,7 +380,7 @@ export async function getToolById(toolId: string, authToken?: string): Promise<T
 // Reservation operations
 export async function getReservationById(reservationId: string, authToken?: string): Promise<Reservation | null> {
   const query = `
-    query GetReservation($id: ID!) {
+    query GetReservation($id: UUID!) {
       reservation_by_pk(id: $id) {
         id
         toolId
@@ -649,7 +649,7 @@ export async function updateReservation(
   authToken?: string
 ): Promise<Reservation> {
   const query = `
-    mutation UpdateReservation($id: ID!, $item: UpdateReservationInput!) {
+    mutation UpdateReservation($id: UUID!, $item: UpdateReservationInput!) {
       updateReservation(id: $id, item: $item) {
         id
         toolId
@@ -976,7 +976,7 @@ export async function updateUserReputationScore(userId: string, authToken?: stri
   const score = await calculateUserReputationScore(userId, authToken);
 
   const query = `
-    mutation UpdateUserReputation($id: ID!, $item: UpdateUserInput!) {
+    mutation UpdateUserReputation($id: UUID!, $item: UpdateUserInput!) {
       updateUser(id: $id, item: $item) {
         id
         reputationScore
@@ -1118,7 +1118,7 @@ export async function getUnreadNotificationCount(userId: string, authToken?: str
 
 export async function markNotificationAsRead(id: string, authToken?: string): Promise<Notification> {
   const query = `
-    mutation MarkNotificationRead($id: ID!, $item: UpdateNotificationInput!) {
+    mutation MarkNotificationRead($id: UUID!, $item: UpdateNotificationInput!) {
       updateNotification(id: $id, item: $item) {
         id
         userId
@@ -1227,7 +1227,7 @@ export async function updateUserSubscription(
   authToken?: string
 ): Promise<User> {
   const query = `
-    mutation UpdateUserSubscription($id: ID!, $item: UpdateUserInput!) {
+    mutation UpdateUserSubscription($id: UUID!, $item: UpdateUserInput!) {
       updateUser(id: $id, item: $item) {
         id
         externalId
@@ -1279,7 +1279,7 @@ interface PublicUserProfile {
  */
 export async function getPublicUserProfile(userId: string, authToken?: string): Promise<PublicUserProfile | null> {
   const query = `
-    query GetPublicProfile($id: ID!) {
+    query GetPublicProfile($id: UUID!) {
       user_by_pk(id: $id) {
         id
         displayName
@@ -1588,7 +1588,7 @@ export async function userSharesCircleWithTool(
 ): Promise<boolean> {
   // Get all circles the user is a member of
   const userCirclesQuery = `
-    query GetUserCircles($userId: String!) {
+    query GetUserCircles($userId: UUID!) {
       circleMembers(filter: { userId: { eq: $userId } }) {
         items {
           circleId
@@ -1609,7 +1609,7 @@ export async function userSharesCircleWithTool(
 
   // Get all circles the tool is shared with
   const toolCirclesQuery = `
-    query GetToolCircles($toolId: String!) {
+    query GetToolCircles($toolId: UUID!) {
       toolCircles(filter: { toolId: { eq: $toolId } }) {
         items {
           circleId

@@ -892,6 +892,7 @@ export function RegisterRoutes(app: Router,opts?:{multer?:ReturnType<typeof mult
                 request: {"in":"request","name":"request","required":true,"dataType":"object"},
                 q: {"in":"query","name":"q","dataType":"string"},
                 category: {"in":"query","name":"category","dataType":"string"},
+                status: {"in":"query","name":"status","dataType":"union","subSchemas":[{"dataType":"enum","enums":["available"]},{"dataType":"enum","enums":["unavailable"]}]},
                 circleId: {"in":"query","name":"circleId","dataType":"string"},
                 ownerId: {"in":"query","name":"ownerId","dataType":"string"},
                 availableFrom: {"in":"query","name":"availableFrom","dataType":"string"},
@@ -928,9 +929,50 @@ export function RegisterRoutes(app: Router,opts?:{multer?:ReturnType<typeof mult
             }
         });
         // WARNING: This file was auto-generated with tsoa. Please do not modify it. Re-run tsoa to re-generate this file: https://github.com/lukeautry/tsoa
+        const argsToolsController_listTools: Record<string, TsoaRoute.ParameterSchema> = {
+                request: {"in":"request","name":"request","required":true,"dataType":"object"},
+                category: {"in":"query","name":"category","dataType":"string"},
+                status: {"in":"query","name":"status","dataType":"union","subSchemas":[{"dataType":"enum","enums":["available"]},{"dataType":"enum","enums":["unavailable"]}]},
+                circleId: {"in":"query","name":"circleId","dataType":"string"},
+                ownerId: {"in":"query","name":"ownerId","dataType":"string"},
+                availableFrom: {"in":"query","name":"availableFrom","dataType":"string"},
+                availableTo: {"in":"query","name":"availableTo","dataType":"string"},
+                sortBy: {"in":"query","name":"sortBy","dataType":"union","subSchemas":[{"dataType":"enum","enums":["relevance"]},{"dataType":"enum","enums":["dateAdded"]},{"dataType":"enum","enums":["nameAsc"]},{"dataType":"enum","enums":["nameDesc"]}]},
+                page: {"in":"query","name":"page","dataType":"double"},
+                pageSize: {"in":"query","name":"pageSize","dataType":"double"},
+        };
+        app.get('/api/tools',
+            authenticateMiddleware([{"Bearer":[]}]),
+            ...(fetchMiddlewares<RequestHandler>(ToolsController)),
+            ...(fetchMiddlewares<RequestHandler>(ToolsController.prototype.listTools)),
+
+            async function ToolsController_listTools(request: ExRequest, response: ExResponse, next: any) {
+
+            // WARNING: This file was auto-generated with tsoa. Please do not modify it. Re-run tsoa to re-generate this file: https://github.com/lukeautry/tsoa
+
+            let validatedArgs: any[] = [];
+            try {
+                validatedArgs = templateService.getValidatedArgs({ args: argsToolsController_listTools, request, response });
+
+                const controller = new ToolsController();
+
+              await templateService.apiHandler({
+                methodName: 'listTools',
+                controller,
+                response,
+                next,
+                validatedArgs,
+                successStatus: undefined,
+              });
+            } catch (err) {
+                return next(err);
+            }
+        });
+        // WARNING: This file was auto-generated with tsoa. Please do not modify it. Re-run tsoa to re-generate this file: https://github.com/lukeautry/tsoa
         const argsToolsController_browseTools: Record<string, TsoaRoute.ParameterSchema> = {
                 request: {"in":"request","name":"request","required":true,"dataType":"object"},
                 category: {"in":"query","name":"category","dataType":"string"},
+                status: {"in":"query","name":"status","dataType":"union","subSchemas":[{"dataType":"enum","enums":["available"]},{"dataType":"enum","enums":["unavailable"]}]},
                 circleId: {"in":"query","name":"circleId","dataType":"string"},
                 ownerId: {"in":"query","name":"ownerId","dataType":"string"},
                 availableFrom: {"in":"query","name":"availableFrom","dataType":"string"},

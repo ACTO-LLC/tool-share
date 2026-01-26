@@ -336,17 +336,26 @@ describe('ToolsController', () => {
     });
   });
 
-  describe('browseTools', () => {
-    it('should return paginated available tools', async () => {
+  describe('listTools (GET /api/tools)', () => {
+    it('should return paginated available tools from user circles', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
       const mockTools = [
         createMockTool({ id: 'tool-1', name: 'Drill' }),
         createMockTool({ id: 'tool-2', name: 'Saw' }),
       ];
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
 
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
       mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      // Mock getToolCircles for each tool
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
 
       const request = createMockRequest();
-      const result = await controller.browseTools(request);
+      const result = await controller.listTools(request);
 
       expect(result.tools).toHaveLength(2);
       expect(result.total).toBe(2);
@@ -354,16 +363,34 @@ describe('ToolsController', () => {
       expect(result.pageSize).toBe(20);
     });
 
+    it('should return empty when user not found', async () => {
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(null);
+
+      const request = createMockRequest();
+      const result = await controller.listTools(request);
+
+      expect(result.tools).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
     it('should filter by category', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
       const mockTools = [
         createMockTool({ id: 'tool-1', name: 'Drill', category: 'Power Tools' }),
         createMockTool({ id: 'tool-2', name: 'Rake', category: 'Gardening' }),
       ];
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
 
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
       mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
 
       const request = createMockRequest();
-      const result = await controller.browseTools(
+      const result = await controller.listTools(
         request,
         'Power Tools'
       );
@@ -372,17 +399,80 @@ describe('ToolsController', () => {
       expect(result.tools[0].name).toBe('Drill');
     });
 
+    it('should filter by status', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const mockTools = [
+        createMockTool({ id: 'tool-1', name: 'Drill', status: 'available' as const }),
+        createMockTool({ id: 'tool-2', name: 'Saw', status: 'unavailable' as const }),
+      ];
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+
+      const request = createMockRequest();
+      const result = await controller.listTools(
+        request,
+        undefined,
+        'unavailable'
+      );
+
+      expect(result.tools).toHaveLength(1);
+      expect(result.tools[0].name).toBe('Saw');
+    });
+
+    it('should only return tools from user circles or owned by user', async () => {
+      const mockDbUser = createMockUser({ id: 'user-123' });
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const mockTools = [
+        createMockTool({ id: 'tool-1', name: 'My Drill', ownerId: 'user-123' }), // Owned by user
+        createMockTool({ id: 'tool-2', name: 'Shared Saw', ownerId: 'user-456' }), // In user's circle
+        createMockTool({ id: 'tool-3', name: 'Other Tool', ownerId: 'user-789' }), // Not in user's circle
+      ];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      // Tool 1 is owned by user (no circle check needed)
+      // Tool 2 is in user's circle
+      mockedDabClient.getToolCircles.mockResolvedValueOnce([{ id: 'circle-1', name: 'Friends' }] as any);
+      // Tool 3 is not in user's circle
+      mockedDabClient.getToolCircles.mockResolvedValueOnce([{ id: 'circle-other', name: 'Other' }] as any);
+
+      const request = createMockRequest();
+      const result = await controller.listTools(request);
+
+      expect(result.tools).toHaveLength(2);
+      expect(result.tools.map(t => t.name).sort()).toEqual(['My Drill', 'Shared Saw']);
+    });
+
     it('should sort by name ascending', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
       const mockTools = [
         createMockTool({ id: 'tool-1', name: 'Zebra Tool', category: 'Other' }),
         createMockTool({ id: 'tool-2', name: 'Alpha Tool', category: 'Other' }),
       ];
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
 
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
       mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
 
       const request = createMockRequest();
-      const result = await controller.browseTools(
+      const result = await controller.listTools(
         request,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -394,22 +484,193 @@ describe('ToolsController', () => {
       expect(result.tools[0].name).toBe('Alpha Tool');
       expect(result.tools[1].name).toBe('Zebra Tool');
     });
+
+    it('should apply pagination correctly', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const mockTools = Array.from({ length: 25 }, (_, i) =>
+        createMockTool({ id: `tool-${i}`, name: `Tool ${i}` })
+      );
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+
+      const request = createMockRequest();
+      const result = await controller.listTools(
+        request,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        2, // page 2
+        10  // pageSize 10
+      );
+
+      expect(result.tools).toHaveLength(10);
+      expect(result.total).toBe(25);
+      expect(result.page).toBe(2);
+      expect(result.pageSize).toBe(10);
+    });
+  });
+
+  describe('browseTools (deprecated)', () => {
+    it('should delegate to listTools', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const mockTools = [
+        createMockTool({ id: 'tool-1', name: 'Drill' }),
+      ];
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.getAllAvailableTools.mockResolvedValueOnce(mockTools as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+
+      const request = createMockRequest();
+      const result = await controller.browseTools(request);
+
+      expect(result.tools).toHaveLength(1);
+      expect(result.page).toBe(1);
+    });
   });
 
   describe('searchTools', () => {
-    it('should search tools with query', async () => {
+    it('should search tools with query and filter by user circles', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
       const searchResult = {
         tools: [createMockTool({ id: 'tool-1', name: 'DeWalt Drill' })],
         total: 1,
       };
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
 
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
       mockedDabClient.searchTools.mockResolvedValueOnce(searchResult as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
 
       const request = createMockRequest();
       const result = await controller.searchTools(request, 'drill');
 
       expect(result.tools).toHaveLength(1);
       expect(result.tools[0].name).toBe('DeWalt Drill');
+    });
+
+    it('should return empty when user not found', async () => {
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(null);
+
+      const request = createMockRequest();
+      const result = await controller.searchTools(request, 'drill');
+
+      expect(result.tools).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
+    it('should filter by status', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const searchResult = {
+        tools: [createMockTool({ id: 'tool-1', name: 'Drill', status: 'unavailable' as const })],
+        total: 1,
+      };
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.searchTools.mockResolvedValueOnce(searchResult as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+
+      const request = createMockRequest();
+      const result = await controller.searchTools(
+        request,
+        'drill',
+        undefined,
+        'unavailable'
+      );
+
+      expect(result.tools).toHaveLength(1);
+      expect(mockedDabClient.searchTools).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'unavailable' }),
+        expect.any(String)
+      );
+    });
+
+    it('should filter by category', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const searchResult = {
+        tools: [createMockTool({ id: 'tool-1', name: 'Drill', category: 'Power Tools' })],
+        total: 1,
+      };
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.searchTools.mockResolvedValueOnce(searchResult as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+
+      const request = createMockRequest();
+      const result = await controller.searchTools(
+        request,
+        'drill',
+        'Power Tools'
+      );
+
+      expect(result.tools).toHaveLength(1);
+      expect(mockedDabClient.searchTools).toHaveBeenCalledWith(
+        expect.objectContaining({ category: 'Power Tools' }),
+        expect.any(String)
+      );
+    });
+
+    it('should include primary photo URL in results', async () => {
+      const mockDbUser = createMockUser();
+      const mockCircles = [
+        { id: 'circle-1', name: 'Friends', currentUserRole: 'member' as const, memberCount: 5 },
+      ];
+      const searchResult = {
+        tools: [{
+          ...createMockTool({ id: 'tool-1', name: 'Drill' }),
+          photos: [
+            { id: 'photo-1', url: 'blob-name', isPrimary: true, uploadedAt: '2024-01-01T00:00:00Z', toolId: 'tool-1' }
+          ]
+        }],
+        total: 1,
+      };
+      const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
+
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedDabClient.getCirclesByUser.mockResolvedValueOnce(mockCircles as any);
+      mockedDabClient.searchTools.mockResolvedValueOnce(searchResult as any);
+      mockedDabClient.getToolCircles.mockResolvedValue(mockToolCircles as any);
+      mockedBlobService.generateSasUrl.mockReturnValue({
+        url: 'http://example.com/photo.jpg?sas=token',
+        expiresAt: new Date(),
+      });
+
+      const request = createMockRequest();
+      const result = await controller.searchTools(request, 'drill');
+
+      expect(result.tools[0].photos).toHaveLength(1);
+      expect(result.tools[0].photos![0].url).toContain('http://example.com');
+      expect(result.tools[0].photos![0].isPrimary).toBe(true);
     });
   });
 

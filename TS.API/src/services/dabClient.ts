@@ -327,6 +327,7 @@ class DabClient {
     params: {
       query?: string;
       category?: string;
+      status?: 'available' | 'unavailable';
       circleId?: string;
       ownerId?: string;
       availableFrom?: string;
@@ -338,7 +339,15 @@ class DabClient {
     authToken?: string
   ): Promise<{ tools: Tool[]; total: number }> {
     // Build filter conditions
-    const filters: string[] = ['status: { eq: "available" }'];
+    const filters: string[] = [];
+
+    // Filter by status (default to 'available' if not specified, exclude 'archived')
+    if (params.status) {
+      filters.push(`status: { eq: "${params.status}" }`);
+    } else {
+      // Default: only show available tools (not 'unavailable' or 'archived')
+      filters.push('status: { eq: "available" }');
+    }
 
     if (params.category) {
       filters.push(`category: { eq: "${params.category}" }`);

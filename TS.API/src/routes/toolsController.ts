@@ -140,10 +140,22 @@ export class ToolsController extends Controller {
     return dabClient.getCategories();
   }
 
-  // ==================== SEARCH ====================
+  // ==================== SEARCH & BROWSE ====================
 
   /**
-   * Search tools with filters
+   * Search tools with full-text search across name, description, brand, model.
+   * Supports filtering by category, availability status, and date range.
+   * Only returns tools visible to the user's circles.
+   * @param q Search query string (searches name, description, brand, model)
+   * @param category Filter by tool category
+   * @param status Filter by availability status ('available' or 'unavailable')
+   * @param circleId Filter by specific circle
+   * @param ownerId Filter by tool owner
+   * @param availableFrom Filter tools available from this date (YYYY-MM-DD)
+   * @param availableTo Filter tools available until this date (YYYY-MM-DD)
+   * @param sortBy Sort order: 'relevance', 'dateAdded', 'nameAsc', 'nameDesc'
+   * @param page Page number (default: 1)
+   * @param pageSize Items per page (default: 20)
    */
   @Get('/search')
   @Security('Bearer')
@@ -151,6 +163,7 @@ export class ToolsController extends Controller {
     @Request() request: ExpressRequest,
     @Query() q?: string,
     @Query() category?: string,
+    @Query() status?: 'available' | 'unavailable',
     @Query() circleId?: string,
     @Query() ownerId?: string,
     @Query() availableFrom?: string,
@@ -159,12 +172,24 @@ export class ToolsController extends Controller {
     @Query() page?: number,
     @Query() pageSize?: number
   ): Promise<ToolListResponse> {
+    const user = request.user as AuthenticatedUser;
     const authToken = this.getAuthToken(request);
+
+    // Get the user's internal ID
+    const dbUser = await dabClient.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      return { tools: [], total: 0, page: page || 1, pageSize: pageSize || 20 };
+    }
+
+    // Get all circles the user belongs to
+    const userCircles = await dabClient.getCirclesByUser(dbUser.id, authToken);
+    const userCircleIds = new Set(userCircles.map(c => c.id));
 
     const result = await dabClient.searchTools(
       {
         query: q,
         category,
+        status,
         circleId,
         ownerId,
         availableFrom,
@@ -176,25 +201,53 @@ export class ToolsController extends Controller {
       authToken
     );
 
+    // Filter tools to only include those in user's circles (or owned by user)
+    const visibleToolsPromises = result.tools.map(async tool => {
+      // User can always see their own tools
+      if (tool.ownerId === dbUser.id) {
+        return tool;
+      }
+
+      // Check if tool is shared with any of user's circles
+      const toolCircles = await dabClient.getToolCircles(tool.id, authToken);
+      const sharedWithUserCircle = toolCircles.some(c => userCircleIds.has(c.id));
+
+      return sharedWithUserCircle ? tool : null;
+    });
+
+    const visibleToolsResults = await Promise.all(visibleToolsPromises);
+    const visibleTools = visibleToolsResults.filter((t): t is NonNullable<typeof t> => t !== null);
+
     // Transform to response format with SAS URLs for photos
-    const tools = result.tools.map(tool => this.transformToolResponse(tool));
+    const tools = visibleTools.map(tool => this.transformToolResponse(tool));
 
     return {
       tools,
-      total: result.total,
+      total: visibleTools.length,
       page: page || 1,
       pageSize: pageSize || 20,
     };
   }
 
   /**
-   * Browse all available tools (public browsing)
+   * Browse all available tools with pagination.
+   * Returns tools from all of the user's circles.
+   * @param category Filter by tool category
+   * @param status Filter by availability status ('available' or 'unavailable')
+   * @param circleId Filter by specific circle
+   * @param ownerId Filter by tool owner
+   * @param availableFrom Filter tools available from this date (YYYY-MM-DD)
+   * @param availableTo Filter tools available until this date (YYYY-MM-DD)
+   * @param sortBy Sort order: 'relevance', 'dateAdded', 'nameAsc', 'nameDesc'
+   * @param page Page number (default: 1)
+   * @param pageSize Items per page (default: 20)
    */
-  @Get('/browse')
+  @Get('/')
   @Security('Bearer')
-  public async browseTools(
+  public async listTools(
     @Request() request: ExpressRequest,
     @Query() category?: string,
+    @Query() status?: 'available' | 'unavailable',
     @Query() circleId?: string,
     @Query() ownerId?: string,
     @Query() availableFrom?: string,
@@ -203,27 +256,61 @@ export class ToolsController extends Controller {
     @Query() page?: number,
     @Query() pageSize?: number
   ): Promise<ToolListResponse> {
+    const user = request.user as AuthenticatedUser;
     const authToken = this.getAuthToken(request);
-    const allTools = await dabClient.getAllAvailableTools(authToken);
 
-    // Apply filters
-    let filteredTools = allTools;
+    // Get the user's internal ID
+    const dbUser = await dabClient.getUserByExternalId(user.id, authToken);
+    if (!dbUser) {
+      return { tools: [], total: 0, page: page || 1, pageSize: pageSize || 20 };
+    }
 
+    // Get all circles the user belongs to
+    const userCircles = await dabClient.getCirclesByUser(dbUser.id, authToken);
+    const userCircleIds = new Set(userCircles.map(c => c.id));
+
+    // Get tools - either filter by specific circle or get all available tools
+    let allTools = await dabClient.getAllAvailableTools(authToken);
+
+    // Apply status filter (default: available only, unless status is specified)
+    if (status) {
+      allTools = allTools.filter(t => t.status === status);
+    }
+
+    // Filter to only tools visible to user's circles (or owned by user)
+    const visibleToolsPromises = allTools.map(async tool => {
+      // User can always see their own tools
+      if (tool.ownerId === dbUser.id) {
+        return tool;
+      }
+
+      // Check if tool is shared with any of user's circles
+      const toolCircles = await dabClient.getToolCircles(tool.id, authToken);
+      const sharedWithUserCircle = toolCircles.some(c => userCircleIds.has(c.id));
+
+      return sharedWithUserCircle ? tool : null;
+    });
+
+    const visibleToolsResults = await Promise.all(visibleToolsPromises);
+    let filteredTools = visibleToolsResults.filter((t): t is NonNullable<typeof t> => t !== null);
+
+    // Apply category filter
     if (category) {
       filteredTools = filteredTools.filter(t => t.category === category);
     }
 
+    // Apply owner filter
     if (ownerId) {
       filteredTools = filteredTools.filter(t => t.ownerId === ownerId);
     }
 
-    // Apply circle filtering
+    // Apply circle filtering (further restrict to specific circle)
     if (circleId) {
       const circleToolIds = await dabClient.getCircleToolIds(circleId, authToken);
       filteredTools = filteredTools.filter(t => circleToolIds.has(t.id));
     }
 
-    // Apply availability filtering
+    // Apply availability date filtering
     if (availableFrom && availableTo) {
       const unavailableToolIds = await dabClient.getUnavailableToolIds(
         availableFrom,
@@ -234,39 +321,69 @@ export class ToolsController extends Controller {
     }
 
     // Apply sorting
-    if (sortBy) {
-      switch (sortBy) {
-        case 'nameAsc':
-          filteredTools.sort((a, b) => a.name.localeCompare(b.name));
-          break;
-        case 'nameDesc':
-          filteredTools.sort((a, b) => b.name.localeCompare(a.name));
-          break;
-        case 'dateAdded':
-          filteredTools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          break;
-        case 'relevance':
-        default:
-          // Default sorting by createdAt desc
-          filteredTools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-          break;
-      }
+    switch (sortBy) {
+      case 'nameAsc':
+        filteredTools.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case 'nameDesc':
+        filteredTools.sort((a, b) => b.name.localeCompare(a.name));
+        break;
+      case 'dateAdded':
+      case 'relevance':
+      default:
+        // Default sorting by createdAt desc
+        filteredTools.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
     }
 
     // Apply pagination
     const currentPage = page || 1;
     const currentPageSize = pageSize || 20;
     const start = (currentPage - 1) * currentPageSize;
+    const totalCount = filteredTools.length;
     const paginatedTools = filteredTools.slice(start, start + currentPageSize);
 
     const tools = paginatedTools.map(tool => this.transformToolResponse(tool));
 
     return {
       tools,
-      total: filteredTools.length,
+      total: totalCount,
       page: currentPage,
       pageSize: currentPageSize,
     };
+  }
+
+  /**
+   * Browse all available tools (deprecated - use GET /api/tools instead)
+   * @deprecated Use GET /api/tools endpoint instead
+   */
+  @Get('/browse')
+  @Security('Bearer')
+  public async browseTools(
+    @Request() request: ExpressRequest,
+    @Query() category?: string,
+    @Query() status?: 'available' | 'unavailable',
+    @Query() circleId?: string,
+    @Query() ownerId?: string,
+    @Query() availableFrom?: string,
+    @Query() availableTo?: string,
+    @Query() sortBy?: 'relevance' | 'dateAdded' | 'nameAsc' | 'nameDesc',
+    @Query() page?: number,
+    @Query() pageSize?: number
+  ): Promise<ToolListResponse> {
+    // Delegate to listTools for backward compatibility
+    return this.listTools(
+      request,
+      category,
+      status,
+      circleId,
+      ownerId,
+      availableFrom,
+      availableTo,
+      sortBy,
+      page,
+      pageSize
+    );
   }
 
   // ==================== TOOL CRUD ====================

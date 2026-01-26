@@ -395,60 +395,79 @@ export class ReservationsController extends Controller {
     const user = request.user as AuthenticatedUser;
     const authToken = request.headers.authorization?.substring(7);
 
-    const reservation = await dabService.getReservationById(id, authToken);
-    if (!reservation) {
-      this.setStatus(404);
-      throw new Error('Reservation not found.');
-    }
+    console.log('[ReservationsController] approveReservation called:', { id, userId: user.id });
 
-    // Verify user is the tool owner
-    const dbUser = await dabService.getUserByExternalId(user.id, authToken);
-    if (!dbUser || reservation.tool?.ownerId !== dbUser.id) {
-      this.setStatus(403);
-      throw new Error('Only the tool owner can approve reservations.');
-    }
+    try {
+      const reservation = await dabService.getReservationById(id, authToken);
+      console.log('[ReservationsController] Reservation:', reservation?.id, 'status:', reservation?.status);
 
-    if (reservation.status !== 'pending') {
-      this.setStatus(400);
-      throw new Error(`Cannot approve a reservation with status "${reservation.status}".`);
-    }
+      if (!reservation) {
+        this.setStatus(404);
+        throw new Error('Reservation not found.');
+      }
 
-    // Re-check for conflicts (in case another reservation was approved in the meantime)
-    const hasConflict = await dabService.checkDateConflicts(
-      reservation.toolId,
-      reservation.startDate,
-      reservation.endDate,
-      id,
-      authToken
-    );
+      // Verify user is the tool owner
+      const dbUser = await dabService.getUserByExternalId(user.id, authToken);
+      console.log('[ReservationsController] DB User:', dbUser?.id, 'Tool owner:', reservation.tool?.ownerId);
 
-    if (hasConflict) {
-      this.setStatus(409);
-      throw new Error('The dates now conflict with another reservation. Please decline this request.');
-    }
+      if (!dbUser || reservation.tool?.ownerId !== dbUser.id) {
+        this.setStatus(403);
+        throw new Error('Only the tool owner can approve reservations.');
+      }
 
-    const updated = await dabService.updateReservation(
-      id,
-      {
-        status: 'confirmed',
-        ownerNote: body?.note,
-      },
-      authToken
-    );
+      if (reservation.status !== 'pending') {
+        this.setStatus(400);
+        throw new Error(`Cannot approve a reservation with status "${reservation.status}".`);
+      }
 
-    // Send notification to borrower
-    if (reservation.borrower && reservation.tool?.owner) {
-      await notificationService.notifyReservationApproved(
-        reservation.borrowerId,
-        reservation.tool.owner.displayName,
-        reservation.tool.name,
-        id,
+      // Re-check for conflicts (in case another reservation was approved in the meantime)
+      console.log('[ReservationsController] Checking for conflicts...');
+      const hasConflict = await dabService.checkDateConflicts(
+        reservation.toolId,
         reservation.startDate,
+        reservation.endDate,
+        id,
         authToken
       );
-    }
 
-    return updated as ReservationResponse;
+      if (hasConflict) {
+        this.setStatus(409);
+        throw new Error('The dates now conflict with another reservation. Please decline this request.');
+      }
+
+      console.log('[ReservationsController] Updating reservation status to confirmed...');
+      const updated = await dabService.updateReservation(
+        id,
+        {
+          status: 'confirmed',
+          ownerNote: body?.note,
+        },
+        authToken
+      );
+      console.log('[ReservationsController] Reservation updated:', updated?.id);
+
+      // Send notification to borrower
+      if (reservation.borrower && reservation.tool?.owner) {
+        try {
+          await notificationService.notifyReservationApproved(
+            reservation.borrowerId,
+            reservation.tool.owner.displayName,
+            reservation.tool.name,
+            id,
+            reservation.startDate,
+            authToken
+          );
+        } catch (notifError) {
+          // Log but don't fail the approval if notification fails
+          console.error('[ReservationsController] Failed to send notification:', notifError);
+        }
+      }
+
+      return updated as ReservationResponse;
+    } catch (error) {
+      console.error('[ReservationsController] approveReservation error:', error);
+      throw error;
+    }
   }
 
   /**

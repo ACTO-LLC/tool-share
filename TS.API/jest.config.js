@@ -25,4 +25,8 @@ module.exports = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
+  // Transform ESM-only modules (uuid v13+)
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)',
+  ],
 };

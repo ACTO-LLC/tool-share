@@ -3,6 +3,11 @@
  * Configure global mocks and test environment
  */
 
+// Mock uuid module (ESM-only in v13+)
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'test-uuid-1234'),
+}));
+
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';
 process.env.PORT = '3000';

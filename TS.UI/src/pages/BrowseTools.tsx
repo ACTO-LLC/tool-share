@@ -335,7 +335,7 @@ export default function BrowseTools() {
 
   // Filter chips for active filters (excluding category which has its own chip row)
   const renderFilterChips = () => {
-    const chips: JSX.Element[] = [];
+    const chips: React.ReactElement[] = [];
 
     // Category is now shown in dedicated chip row above, so we skip it here
 

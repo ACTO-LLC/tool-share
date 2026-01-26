@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^5.0.2",
-    "@azure/msal-react": "^2.1.0",
+    "@azure/msal-react": "^5.0.2",
     "@emotion/react": "^11.13.0",
     "@emotion/styled": "^11.13.0",
     "@fullcalendar/core": "^6.1.15",
@@ -57,7 +57,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^4.3.0",
-    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
     "dotenv": "^17.2.3",
     "eslint": "^9.0.0",
     "eslint-plugin-react-hooks": "^5.0.0",

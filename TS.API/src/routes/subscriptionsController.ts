@@ -372,9 +372,10 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
       status = subscription.status;
   }
 
-  // Get subscription end date
-  const subscriptionEndsAt = subscription.current_period_end
-    ? new Date(subscription.current_period_end * 1000).toISOString()
+  // Get subscription end date from first subscription item (Stripe v20+)
+  const currentPeriodEnd = subscription.items?.data?.[0]?.current_period_end;
+  const subscriptionEndsAt = currentPeriodEnd
+    ? new Date(currentPeriodEnd * 1000).toISOString()
     : undefined;
 
   console.log(`Updating subscription for user ${userId}: status=${status}, endsAt=${subscriptionEndsAt}`);

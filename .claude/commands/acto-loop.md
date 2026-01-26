@@ -175,7 +175,7 @@ After PR is created:
 **Review iteration limit:** Max 3 review-fix cycles to prevent infinite loops.
 
 #### Step 1: Request Copilot Review
-- Add comment to PR: `@Copilot please review this pull request`
+- Add comment to PR: `gh pr comment <number> --body "@copilot please review"`
 - Poll for response (max 2 minutes, check every 30 seconds):
   ```bash
   gh pr view <number> --json comments --jq '.comments[-1].body'

@@ -150,19 +150,24 @@ Work in the worktree at <WORKTREE_PATH>.
 Your task:
 1. cd to <WORKTREE_PATH>
 2. Read the full issue: `gh issue view <NUMBER> --json title,body,labels`
-3. Explore the relevant codebase area
-4. Implement the required changes
-5. Run build command: <BUILD_CMD>
-6. Run tests: <TEST_CMD>
-7. Commit changes with message referencing #<NUMBER>
-8. Push branch and create PR with `gh pr create`
+3. Read CLAUDE.md for project conventions
+4. Explore the relevant codebase area
+5. Implement the required changes
+6. Run build command: <BUILD_CMD>
+7. Run tests: <TEST_CMD>
+8. Commit changes with message referencing #<NUMBER>
+9. Push branch and create PR with `gh pr create`
+10. Request Copilot review: `gh pr comment <PR_NUMBER> --body "@copilot please review"`
+11. Wait for Copilot response, implement any valid suggestions
+12. Re-run build and tests after review changes
 
 Config from .claude/acto-config.json:
 - Build: <build.command> in <build.workingDirectory>
 - Test: <test.command> with env <test.env>
 - Branch: <BRANCH_NAME>
+- Copilot Review: enabled (github.copilotReview: true)
 
-Work autonomously. Create the PR when done, or report blockers you cannot resolve.
+Work autonomously. Create the PR, request Copilot review, and implement suggestions. Report blockers you cannot resolve.
 ```
 
 #### Example Task Tool Calls

@@ -1,3 +1,19 @@
+/**
+ * ReservationDetail Page Component
+ *
+ * Displays the full details of a reservation including:
+ * - Status timeline with MUI Stepper showing loan lifecycle (pending -> confirmed -> active -> completed)
+ * - Tool information (photo, name, owner, category)
+ * - Reservation dates (start/end, pickup/return timestamps)
+ * - Participant info (owner and borrower with contact details)
+ * - Before/after photo sections for condition documentation
+ * - Contextual action buttons based on user role and reservation status:
+ *   - Owner: Approve/Decline (pending), Cancel (pending/confirmed)
+ *   - Borrower: Confirm Pickup (confirmed), Confirm Return (active), Cancel (pending/confirmed)
+ * - Review section for completed reservations
+ *
+ * @see https://github.com/ACTO-LLC/tool-share/issues/22
+ */
 import { useState, useEffect, useCallback } from 'react';
 import {
   Box,

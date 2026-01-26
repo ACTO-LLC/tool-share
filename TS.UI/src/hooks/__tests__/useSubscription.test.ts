@@ -24,8 +24,10 @@ vi.mock('../../services/api', () => ({
 // Mock window.location.href
 const originalLocation = window.location;
 beforeEach(() => {
-  delete (window as { location?: Location }).location;
-  window.location = { ...originalLocation, href: '' } as Location;
+  Object.defineProperty(window, 'location', {
+    writable: true,
+    value: { ...originalLocation, href: '' },
+  });
 });
 
 describe('useSubscription hooks', () => {

@@ -1233,13 +1233,11 @@ class DabClient {
     return [
       'Power Tools',
       'Hand Tools',
-      'Gardening',
+      'Garden/Yard',
       'Automotive',
-      'Plumbing',
-      'Electrical',
-      'Painting',
-      'Measuring',
-      'Safety',
+      'Kitchen',
+      'Camping/Outdoor',
+      'Electronics',
       'Other',
     ];
   }

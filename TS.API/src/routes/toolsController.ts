@@ -403,6 +403,39 @@ export class ToolsController extends Controller {
     console.log('[CreateTool] User:', user);
     const authToken = this.getAuthToken(request);
 
+    // Validate required fields
+    if (!body.name || body.name.trim().length === 0) {
+      this.setStatus(400);
+      throw new Error('Tool name is required');
+    }
+    if (body.name.length > 100) {
+      this.setStatus(400);
+      throw new Error('Tool name must be 100 characters or less');
+    }
+    if (!body.category || body.category.trim().length === 0) {
+      this.setStatus(400);
+      throw new Error('Tool category is required');
+    }
+    // Validate category is in the allowed list
+    const validCategories = dabClient.getCategories();
+    if (!validCategories.includes(body.category)) {
+      this.setStatus(400);
+      throw new Error(`Invalid category. Valid categories are: ${validCategories.join(', ')}`);
+    }
+    // Validate optional fields length
+    if (body.description && body.description.length > 1000) {
+      this.setStatus(400);
+      throw new Error('Description must be 1000 characters or less');
+    }
+    if (body.brand && body.brand.length > 100) {
+      this.setStatus(400);
+      throw new Error('Brand must be 100 characters or less');
+    }
+    if (body.model && body.model.length > 100) {
+      this.setStatus(400);
+      throw new Error('Model must be 100 characters or less');
+    }
+
     // Get the user's internal ID from their external ID
     console.log('[CreateTool] Getting user by externalId:', user.id);
     let dbUser;
@@ -505,6 +538,37 @@ export class ToolsController extends Controller {
   ): Promise<ToolResponse> {
     const user = request.user as AuthenticatedUser;
     const authToken = this.getAuthToken(request);
+
+    // Validate fields if provided
+    if (body.name !== undefined) {
+      if (body.name.trim().length === 0) {
+        this.setStatus(400);
+        throw new Error('Tool name cannot be empty');
+      }
+      if (body.name.length > 100) {
+        this.setStatus(400);
+        throw new Error('Tool name must be 100 characters or less');
+      }
+    }
+    if (body.category !== undefined) {
+      const validCategories = dabClient.getCategories();
+      if (!validCategories.includes(body.category)) {
+        this.setStatus(400);
+        throw new Error(`Invalid category. Valid categories are: ${validCategories.join(', ')}`);
+      }
+    }
+    if (body.description !== undefined && body.description.length > 1000) {
+      this.setStatus(400);
+      throw new Error('Description must be 1000 characters or less');
+    }
+    if (body.brand !== undefined && body.brand.length > 100) {
+      this.setStatus(400);
+      throw new Error('Brand must be 100 characters or less');
+    }
+    if (body.model !== undefined && body.model.length > 100) {
+      this.setStatus(400);
+      throw new Error('Model must be 100 characters or less');
+    }
 
     // Verify ownership
     const existingTool = await dabClient.getToolById(id, authToken);

@@ -110,7 +110,9 @@ function getActiveStep(status: ReservationStatus): number {
     case 'active':
       return 2;
     case 'completed':
-      return 4; // Completed
+      // Return array length (4) to mark ALL steps as completed (indices 0-3)
+      // This ensures the final "Returned" step shows green, not active blue
+      return 4;
     case 'cancelled':
     case 'declined':
       return -1; // Special state

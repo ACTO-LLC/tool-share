@@ -214,16 +214,46 @@ export class UsersController extends Controller {
       throw new Error('User not found');
     }
 
+    // Validate display name
+    if (body.displayName !== undefined) {
+      if (body.displayName.trim() === '') {
+        this.setStatus(400);
+        throw new Error('Display name cannot be empty');
+      }
+      if (body.displayName.length > 100) {
+        this.setStatus(400);
+        throw new Error('Display name must be 100 characters or less');
+      }
+    }
+
     // Validate bio length
     if (body.bio && body.bio.length > 500) {
       this.setStatus(400);
       throw new Error('Bio must be 500 characters or less');
     }
 
-    // Validate display name
-    if (body.displayName !== undefined && body.displayName.trim() === '') {
+    // Validate phone length
+    if (body.phone && body.phone.length > 20) {
       this.setStatus(400);
-      throw new Error('Display name cannot be empty');
+      throw new Error('Phone number must be 20 characters or less');
+    }
+
+    // Validate address fields length
+    if (body.streetAddress && body.streetAddress.length > 200) {
+      this.setStatus(400);
+      throw new Error('Street address must be 200 characters or less');
+    }
+    if (body.city && body.city.length > 100) {
+      this.setStatus(400);
+      throw new Error('City must be 100 characters or less');
+    }
+    if (body.state && body.state.length > 50) {
+      this.setStatus(400);
+      throw new Error('State must be 50 characters or less');
+    }
+    if (body.zipCode && body.zipCode.length > 20) {
+      this.setStatus(400);
+      throw new Error('ZIP code must be 20 characters or less');
     }
 
     // Build update data object with only provided fields

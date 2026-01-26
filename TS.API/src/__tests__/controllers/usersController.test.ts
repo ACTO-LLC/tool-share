@@ -253,6 +253,126 @@ describe('UsersController', () => {
         'mock-token'
       );
     });
+
+    it('should validate display name length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longName = 'a'.repeat(101);
+
+      await expect(
+        controller.updateCurrentUser(request, { displayName: longName })
+      ).rejects.toThrow('Display name must be 100 characters or less');
+    });
+
+    it('should validate phone length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longPhone = '1'.repeat(21);
+
+      await expect(
+        controller.updateCurrentUser(request, { phone: longPhone })
+      ).rejects.toThrow('Phone number must be 20 characters or less');
+    });
+
+    it('should validate street address length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longAddress = 'a'.repeat(201);
+
+      await expect(
+        controller.updateCurrentUser(request, { streetAddress: longAddress })
+      ).rejects.toThrow('Street address must be 200 characters or less');
+    });
+
+    it('should validate city length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longCity = 'a'.repeat(101);
+
+      await expect(
+        controller.updateCurrentUser(request, { city: longCity })
+      ).rejects.toThrow('City must be 100 characters or less');
+    });
+
+    it('should validate state length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longState = 'a'.repeat(51);
+
+      await expect(
+        controller.updateCurrentUser(request, { state: longState })
+      ).rejects.toThrow('State must be 50 characters or less');
+    });
+
+    it('should validate zipCode length', async () => {
+      const existingUser = {
+        id: 'user-123',
+        externalId: 'ext-user-123',
+        displayName: 'Test User',
+        email: 'test@example.com',
+        reputationScore: 4.0,
+        createdAt: '2024-01-01T00:00:00Z',
+      };
+
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(existingUser);
+
+      const request = createMockRequest();
+      const longZip = '1'.repeat(21);
+
+      await expect(
+        controller.updateCurrentUser(request, { zipCode: longZip })
+      ).rejects.toThrow('ZIP code must be 20 characters or less');
+    });
   });
 
   describe('getPublicProfile', () => {

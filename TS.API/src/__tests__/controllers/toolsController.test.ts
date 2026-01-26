@@ -7,16 +7,19 @@ import { ToolsController } from '../../routes/toolsController';
 import { dabClient } from '../../services/dabClient';
 import * as upcService from '../../services/upcService';
 import { blobStorageService } from '../../services/blobStorageService';
+import * as imageProcessingService from '../../services/imageProcessingService';
 import { Request as ExpressRequest } from 'express';
 
 // Mock dependencies
 jest.mock('../../services/dabClient');
 jest.mock('../../services/upcService');
 jest.mock('../../services/blobStorageService');
+jest.mock('../../services/imageProcessingService');
 
 const mockedDabClient = dabClient as jest.Mocked<typeof dabClient>;
 const mockedUpcService = upcService as jest.Mocked<typeof upcService>;
 const mockedBlobService = blobStorageService as jest.Mocked<typeof blobStorageService>;
+const mockedImageService = imageProcessingService as jest.Mocked<typeof imageProcessingService>;
 
 // Helper to create mock request
 function createMockRequest(overrides: Partial<ExpressRequest> = {}): ExpressRequest {
@@ -789,6 +792,18 @@ describe('ToolsController', () => {
   });
 
   describe('uploadToolPhoto', () => {
+    beforeEach(() => {
+      // Mock image processing by default
+      mockedImageService.processToolPhoto.mockResolvedValue({
+        buffer: Buffer.from('processed'),
+        width: 800,
+        height: 600,
+        format: 'jpeg',
+        size: 1024,
+      });
+      mockedImageService.getMimeType.mockReturnValue('image/jpeg');
+    });
+
     it('should upload photo when user is owner', async () => {
       const mockDbUser = createMockUser();
       const existingTool = { ...createMockTool(), photos: [] };
@@ -828,6 +843,80 @@ describe('ToolsController', () => {
 
       expect(result.id).toBe('photo-123');
       expect(result.isPrimary).toBe(true);
+      expect(mockedImageService.processToolPhoto).toHaveBeenCalledWith(mockFile.buffer);
+    });
+
+    it('should reject when tool already has 5 photos', async () => {
+      const mockDbUser = createMockUser();
+      const existingTool = {
+        ...createMockTool(),
+        photos: [
+          { id: 'photo-1', url: 'blob-1', isPrimary: true, uploadedAt: '2024-01-01T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-2', url: 'blob-2', isPrimary: false, uploadedAt: '2024-01-02T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-3', url: 'blob-3', isPrimary: false, uploadedAt: '2024-01-03T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-4', url: 'blob-4', isPrimary: false, uploadedAt: '2024-01-04T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-5', url: 'blob-5', isPrimary: false, uploadedAt: '2024-01-05T00:00:00Z', toolId: 'tool-123' },
+        ],
+      };
+
+      mockedDabClient.getToolById.mockResolvedValueOnce(existingTool as any);
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.uploadToolPhoto(request, 'tool-123', mockFile)
+      ).rejects.toThrow('Maximum 5 photos allowed per tool');
+    });
+
+    it('should allow upload when tool has 4 photos', async () => {
+      const mockDbUser = createMockUser();
+      const existingTool = {
+        ...createMockTool(),
+        photos: [
+          { id: 'photo-1', url: 'blob-1', isPrimary: true, uploadedAt: '2024-01-01T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-2', url: 'blob-2', isPrimary: false, uploadedAt: '2024-01-02T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-3', url: 'blob-3', isPrimary: false, uploadedAt: '2024-01-03T00:00:00Z', toolId: 'tool-123' },
+          { id: 'photo-4', url: 'blob-4', isPrimary: false, uploadedAt: '2024-01-04T00:00:00Z', toolId: 'tool-123' },
+        ],
+      };
+
+      mockedDabClient.getToolById.mockResolvedValueOnce(existingTool as any);
+      mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
+      mockedBlobService.uploadFile.mockResolvedValueOnce({
+        url: 'http://example.com/photo.jpg',
+        blobName: 'tools/tool-123/photo.jpg',
+      });
+      mockedDabClient.createToolPhoto.mockResolvedValueOnce({
+        id: 'photo-5',
+        toolId: 'tool-123',
+        url: 'tools/tool-123/photo.jpg',
+        isPrimary: false,
+        uploadedAt: '2024-06-15T00:00:00Z',
+      });
+      mockedBlobService.generateSasUrl.mockReturnValue({
+        url: 'http://example.com/photo.jpg?sas=token',
+        expiresAt: new Date(),
+      });
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+      const result = await controller.uploadToolPhoto(request, 'tool-123', mockFile);
+
+      expect(result.id).toBe('photo-5');
     });
 
     it('should reject invalid file type', async () => {

@@ -6,15 +6,20 @@
 import { ReservationsController, NotificationsController } from '../../routes/reservationsController';
 import * as dabService from '../../services/dabService';
 import * as notificationService from '../../services/notificationService';
+import { blobStorageService } from '../../services/blobStorageService';
+import * as imageProcessingService from '../../services/imageProcessingService';
 import { Request as ExpressRequest } from 'express';
 
 // Mock dependencies
 jest.mock('../../services/dabService');
 jest.mock('../../services/notificationService');
 jest.mock('../../services/blobStorageService');
+jest.mock('../../services/imageProcessingService');
 
 const mockedDabService = dabService as jest.Mocked<typeof dabService>;
 const mockedNotificationService = notificationService as jest.Mocked<typeof notificationService>;
+const mockedBlobService = blobStorageService as jest.Mocked<typeof blobStorageService>;
+const mockedImageService = imageProcessingService as jest.Mocked<typeof imageProcessingService>;
 
 // Helper to create mock request
 function createMockRequest(overrides: Partial<ExpressRequest> = {}): ExpressRequest {
@@ -711,6 +716,288 @@ describe('NotificationsController', () => {
       const result = await controller.markAllAsRead(request);
 
       expect(result.success).toBe(true);
+    });
+  });
+});
+
+describe('ReservationsController - Loan Photos', () => {
+  let controller: ReservationsController;
+
+  beforeEach(() => {
+    controller = new ReservationsController();
+    jest.clearAllMocks();
+    // Mock image processing by default
+    mockedImageService.processLoanPhoto.mockResolvedValue({
+      buffer: Buffer.from('processed'),
+      width: 1000,
+      height: 800,
+      format: 'jpeg',
+      size: 2048,
+    });
+    mockedImageService.getMimeType.mockReturnValue('image/jpeg');
+  });
+
+  describe('uploadLoanPhoto', () => {
+    it('should upload before photo for confirmed reservation', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation({ status: 'confirmed' });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+      mockedBlobService.uploadFile.mockResolvedValueOnce({
+        url: 'http://example.com/photo.jpg',
+        blobName: 'loans/res-123/before/photo.jpg',
+      });
+      mockedBlobService.generateSasUrl.mockReturnValue({
+        url: 'http://example.com/photo.jpg?sas=token',
+        expiresAt: new Date(),
+      });
+      mockedDabService.createLoanPhoto.mockResolvedValueOnce({
+        id: 'loanphoto-123',
+        reservationId: 'res-123',
+        type: 'before',
+        url: 'http://example.com/photo.jpg?sas=token',
+        uploadedBy: 'borrower-123',
+        uploadedAt: '2024-06-20T10:00:00Z',
+      } as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+      const result = await controller.uploadLoanPhoto(
+        request,
+        'res-123',
+        mockFile,
+        'before'
+      );
+
+      expect(result.id).toBe('loanphoto-123');
+      expect(result.type).toBe('before');
+      expect(mockedImageService.processLoanPhoto).toHaveBeenCalledWith(mockFile.buffer);
+    });
+
+    it('should upload after photo for active reservation', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation({ status: 'active' });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+      mockedBlobService.uploadFile.mockResolvedValueOnce({
+        url: 'http://example.com/photo.jpg',
+        blobName: 'loans/res-123/after/photo.jpg',
+      });
+      mockedBlobService.generateSasUrl.mockReturnValue({
+        url: 'http://example.com/photo.jpg?sas=token',
+        expiresAt: new Date(),
+      });
+      mockedDabService.createLoanPhoto.mockResolvedValueOnce({
+        id: 'loanphoto-456',
+        reservationId: 'res-123',
+        type: 'after',
+        url: 'http://example.com/photo.jpg?sas=token',
+        uploadedBy: 'borrower-123',
+        uploadedAt: '2024-06-25T10:00:00Z',
+      } as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+      const result = await controller.uploadLoanPhoto(
+        request,
+        'res-123',
+        mockFile,
+        'after'
+      );
+
+      expect(result.id).toBe('loanphoto-456');
+      expect(result.type).toBe('after');
+    });
+
+    it('should reject invalid photo type', async () => {
+      const request = createMockRequest();
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      await expect(
+        controller.uploadLoanPhoto(request, 'res-123', mockFile, 'invalid' as any)
+      ).rejects.toThrow('Photo type must be "before" or "after"');
+    });
+
+    it('should reject before photo for pending reservation', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation({ status: 'pending' });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.uploadLoanPhoto(request, 'res-123', mockFile, 'before')
+      ).rejects.toThrow('Before photos can only be uploaded for confirmed or active reservations');
+    });
+
+    it('should reject after photo for confirmed reservation', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation({ status: 'confirmed' });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.uploadLoanPhoto(request, 'res-123', mockFile, 'after')
+      ).rejects.toThrow('After photos can only be uploaded for active reservations');
+    });
+
+    it('should reject unauthorized user', async () => {
+      const mockOtherUser = createMockUser({ id: 'other-user' });
+      const mockReservation = createMockReservation({ status: 'confirmed' });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockOtherUser as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.uploadLoanPhoto(request, 'res-123', mockFile, 'before')
+      ).rejects.toThrow('Only the borrower or tool owner can upload photos');
+    });
+
+    it('should allow tool owner to upload photos', async () => {
+      const mockOwner = createMockUser({ id: 'owner-123' });
+      const mockReservation = createMockReservation({
+        status: 'confirmed',
+        tool: { ...createMockTool(), ownerId: 'owner-123' },
+      });
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockOwner as any);
+      mockedBlobService.uploadFile.mockResolvedValueOnce({
+        url: 'http://example.com/photo.jpg',
+        blobName: 'loans/res-123/before/photo.jpg',
+      });
+      mockedBlobService.generateSasUrl.mockReturnValue({
+        url: 'http://example.com/photo.jpg?sas=token',
+        expiresAt: new Date(),
+      });
+      mockedDabService.createLoanPhoto.mockResolvedValueOnce({
+        id: 'loanphoto-789',
+        reservationId: 'res-123',
+        type: 'before',
+        url: 'http://example.com/photo.jpg?sas=token',
+        uploadedBy: 'owner-123',
+        uploadedAt: '2024-06-20T10:00:00Z',
+      } as any);
+
+      const mockFile = {
+        buffer: Buffer.from('test'),
+        originalname: 'photo.jpg',
+        mimetype: 'image/jpeg',
+        size: 1024,
+      } as Express.Multer.File;
+
+      const request = createMockRequest();
+      const result = await controller.uploadLoanPhoto(
+        request,
+        'res-123',
+        mockFile,
+        'before'
+      );
+
+      expect(result.id).toBe('loanphoto-789');
+      expect(result.uploadedBy).toBe('owner-123');
+    });
+  });
+
+  describe('getLoanPhotos', () => {
+    it('should return all loan photos for authorized user', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation();
+      const mockPhotos = [
+        { id: 'photo-1', reservationId: 'res-123', type: 'before', url: 'http://example.com/1.jpg', uploadedBy: 'borrower-123', uploadedAt: '2024-06-20T10:00:00Z' },
+        { id: 'photo-2', reservationId: 'res-123', type: 'after', url: 'http://example.com/2.jpg', uploadedBy: 'borrower-123', uploadedAt: '2024-06-25T10:00:00Z' },
+      ];
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+      mockedDabService.getLoanPhotos.mockResolvedValueOnce(mockPhotos as any);
+
+      const request = createMockRequest();
+      const result = await controller.getLoanPhotos(request, 'res-123');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].type).toBe('before');
+      expect(result[1].type).toBe('after');
+    });
+
+    it('should filter photos by type', async () => {
+      const mockBorrower = createMockUser({ id: 'borrower-123' });
+      const mockReservation = createMockReservation();
+      const mockBeforePhotos = [
+        { id: 'photo-1', reservationId: 'res-123', type: 'before', url: 'http://example.com/1.jpg', uploadedBy: 'borrower-123', uploadedAt: '2024-06-20T10:00:00Z' },
+      ];
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockBorrower as any);
+      mockedDabService.getLoanPhotosByType.mockResolvedValueOnce(mockBeforePhotos as any);
+
+      const request = createMockRequest();
+      const result = await controller.getLoanPhotos(request, 'res-123', 'before');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('before');
+      expect(mockedDabService.getLoanPhotosByType).toHaveBeenCalledWith('res-123', 'before', 'mock-token');
+    });
+
+    it('should reject unauthorized user', async () => {
+      const mockOtherUser = createMockUser({ id: 'other-user' });
+      const mockReservation = createMockReservation();
+
+      mockedDabService.getReservationById.mockResolvedValueOnce(mockReservation as any);
+      mockedDabService.getUserByExternalId.mockResolvedValueOnce(mockOtherUser as any);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.getLoanPhotos(request, 'res-123')
+      ).rejects.toThrow('Not authorized to view this reservation');
     });
   });
 });

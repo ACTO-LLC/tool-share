@@ -13,6 +13,7 @@ CREATE TABLE [dbo].[Reservations]
     [createdAt] DATETIME2 DEFAULT GETUTCDATE(),
     [updatedAt] DATETIME2 NULL,
     CONSTRAINT [CK_Reservations_Dates] CHECK ([endDate] >= [startDate]),
+    CONSTRAINT [CK_Reservations_Status] CHECK ([status] IN ('pending', 'confirmed', 'active', 'completed', 'cancelled', 'declined')),
     CONSTRAINT [FK_Reservations_Tools] FOREIGN KEY ([toolId]) REFERENCES [dbo].[Tools]([id]),
     CONSTRAINT [FK_Reservations_Users] FOREIGN KEY ([borrowerId]) REFERENCES [dbo].[Users]([id])
 );

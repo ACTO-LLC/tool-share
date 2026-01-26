@@ -13,6 +13,7 @@ CREATE TABLE [dbo].[Tools]
     [maxLoanDays] INT DEFAULT 7,
     [createdAt] DATETIME2 DEFAULT GETUTCDATE(),
     [updatedAt] DATETIME2 NULL,
+    CONSTRAINT [CK_Tools_Status] CHECK ([status] IN ('available', 'unavailable', 'archived')),
     CONSTRAINT [FK_Tools_Users] FOREIGN KEY ([ownerId]) REFERENCES [dbo].[Users]([id])
 );
 GO

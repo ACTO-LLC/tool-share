@@ -126,6 +126,17 @@ export default function UpcomingReservations({
                       cursor: 'pointer',
                       minHeight: 48,
                       flexWrap: 'wrap',
+                      '&:hover': {
+                        bgcolor: 'action.hover',
+                      },
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/reservations/${reservation.id}`);
+                      }
                     }}
                     onClick={() => navigate(`/reservations/${reservation.id}`)}
                   >

@@ -275,6 +275,17 @@ export default function Dashboard() {
                           py: { xs: 1, sm: 1.5 },
                           cursor: 'pointer',
                           minHeight: 48,
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                          },
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate(`/reservations/${reservation.id}`);
+                          }
                         }}
                         onClick={() =>
                           navigate(`/reservations/${reservation.id}`)
@@ -296,7 +307,7 @@ export default function Dashboard() {
                           secondary={
                             isMobile
                               ? `${format(parseISO(reservation.startDate), 'MMM d')}`
-                              : `${reservation.borrower?.displayName} - ${format(parseISO(reservation.startDate), 'MMM d')} to ${format(parseISO(reservation.endDate), 'MMM d')}`
+                              : `${reservation.borrower?.displayName || 'Unknown User'} - ${format(parseISO(reservation.startDate), 'MMM d')} to ${format(parseISO(reservation.endDate), 'MMM d')}`
                           }
                           primaryTypographyProps={{
                             variant: isMobile ? 'body2' : 'body1',
@@ -310,6 +321,10 @@ export default function Dashboard() {
                           sx={{
                             minHeight: 36,
                             minWidth: { xs: 60, sm: 80 },
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/reservations/${reservation.id}`);
                           }}
                         >
                           Review

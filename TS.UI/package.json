@@ -21,7 +21,7 @@
     "docs:generate:video": "tsx scripts/generate-docs.ts --video"
   },
   "dependencies": {
-    "@azure/msal-browser": "^3.27.0",
+    "@azure/msal-browser": "^5.0.2",
     "@azure/msal-react": "^2.1.0",
     "@emotion/react": "^11.13.0",
     "@emotion/styled": "^11.13.0",

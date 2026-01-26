@@ -117,13 +117,11 @@ describe('ToolsController', () => {
       const categories = [
         'Power Tools',
         'Hand Tools',
-        'Gardening',
+        'Garden/Yard',
         'Automotive',
-        'Plumbing',
-        'Electrical',
-        'Painting',
-        'Measuring',
-        'Safety',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
         'Other',
       ];
 
@@ -132,15 +130,27 @@ describe('ToolsController', () => {
       const result = await controller.getCategories();
 
       expect(result).toEqual(categories);
-      expect(result).toHaveLength(10);
+      expect(result).toHaveLength(8);
     });
   });
 
   describe('createTool', () => {
+    const validCategories = [
+      'Power Tools',
+      'Hand Tools',
+      'Garden/Yard',
+      'Automotive',
+      'Kitchen',
+      'Camping/Outdoor',
+      'Electronics',
+      'Other',
+    ];
+
     it('should create a new tool', async () => {
       const mockDbUser = createMockUser();
       const mockTool = createMockTool({ id: 'tool-new', name: 'New Drill', brand: 'DeWalt' });
 
+      mockedDabClient.getCategories.mockReturnValue(validCategories);
       mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
       mockedDabClient.createTool.mockResolvedValueOnce(mockTool as any);
 
@@ -160,6 +170,7 @@ describe('ToolsController', () => {
       const mockDbUser = createMockUser();
       const mockTool = createMockTool({ id: 'tool-new', name: 'New Drill' });
 
+      mockedDabClient.getCategories.mockReturnValue(validCategories);
       mockedDabClient.getUserByExternalId.mockResolvedValueOnce(mockDbUser as any);
       mockedDabClient.createTool.mockResolvedValueOnce(mockTool as any);
       mockedDabClient.addToolToCircle.mockResolvedValue({
@@ -180,6 +191,16 @@ describe('ToolsController', () => {
 
     it('should throw error when user not found', async () => {
       mockedDabClient.getUserByExternalId.mockResolvedValueOnce(null);
+      mockedDabClient.getCategories.mockReturnValue([
+        'Power Tools',
+        'Hand Tools',
+        'Garden/Yard',
+        'Automotive',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
+        'Other',
+      ]);
 
       const request = createMockRequest();
 
@@ -189,6 +210,72 @@ describe('ToolsController', () => {
           category: 'Power Tools',
         })
       ).rejects.toThrow('User not found');
+    });
+
+    it('should throw error when name is empty', async () => {
+      mockedDabClient.getCategories.mockReturnValue([
+        'Power Tools',
+        'Hand Tools',
+        'Garden/Yard',
+        'Automotive',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
+        'Other',
+      ]);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.createTool(request, {
+          name: '',
+          category: 'Power Tools',
+        })
+      ).rejects.toThrow('Tool name is required');
+    });
+
+    it('should throw error when name exceeds 100 characters', async () => {
+      mockedDabClient.getCategories.mockReturnValue([
+        'Power Tools',
+        'Hand Tools',
+        'Garden/Yard',
+        'Automotive',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
+        'Other',
+      ]);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.createTool(request, {
+          name: 'A'.repeat(101),
+          category: 'Power Tools',
+        })
+      ).rejects.toThrow('Tool name must be 100 characters or less');
+    });
+
+    it('should throw error when category is invalid', async () => {
+      mockedDabClient.getCategories.mockReturnValue([
+        'Power Tools',
+        'Hand Tools',
+        'Garden/Yard',
+        'Automotive',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
+        'Other',
+      ]);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.createTool(request, {
+          name: 'Drill',
+          category: 'Invalid Category',
+        })
+      ).rejects.toThrow('Invalid category');
     });
   });
 
@@ -304,6 +391,33 @@ describe('ToolsController', () => {
         controller.updateTool(request, 'tool-123', { name: 'New Name' })
       ).rejects.toThrow('Not authorized to update this tool');
     });
+
+    it('should throw error when name is empty on update', async () => {
+      const request = createMockRequest();
+
+      await expect(
+        controller.updateTool(request, 'tool-123', { name: '' })
+      ).rejects.toThrow('Tool name cannot be empty');
+    });
+
+    it('should throw error when category is invalid on update', async () => {
+      mockedDabClient.getCategories.mockReturnValue([
+        'Power Tools',
+        'Hand Tools',
+        'Garden/Yard',
+        'Automotive',
+        'Kitchen',
+        'Camping/Outdoor',
+        'Electronics',
+        'Other',
+      ]);
+
+      const request = createMockRequest();
+
+      await expect(
+        controller.updateTool(request, 'tool-123', { category: 'Invalid Category' })
+      ).rejects.toThrow('Invalid category');
+    });
   });
 
   describe('deleteTool', () => {
@@ -380,7 +494,7 @@ describe('ToolsController', () => {
       ];
       const mockTools = [
         createMockTool({ id: 'tool-1', name: 'Drill', category: 'Power Tools' }),
-        createMockTool({ id: 'tool-2', name: 'Rake', category: 'Gardening' }),
+        createMockTool({ id: 'tool-2', name: 'Rake', category: 'Garden/Yard' }),
       ];
       const mockToolCircles = [{ id: 'circle-1', name: 'Friends' }];
 

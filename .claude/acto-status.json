@@ -1,38 +1,72 @@
 {
   "batch": {
-    "startedAt": "2026-01-25T12:00:00Z",
-    "issues": [9, 13, 16]
+    "startedAt": "2026-01-26T03:30:00Z",
+    "issues": [10, 11, 22]
   },
   "issues": {
     "9": {
       "title": "[Track B] User Profile API",
       "area": "API/Users",
       "branch": "feat/9-user-profile-api",
-      "worktree": "tool-share-9",
-      "state": "complete",
+      "worktree": null,
+      "state": "merged",
       "startedAt": "2026-01-25T12:00:00Z",
       "completedAt": "2026-01-25T12:05:00Z",
+      "mergedAt": "2026-01-26T03:07:59Z",
       "pr": "https://github.com/ACTO-LLC/tool-share/pull/85"
     },
     "13": {
       "title": "[Track B] Search API",
       "area": "API/Search",
       "branch": "feat/13-search-api",
-      "worktree": "tool-share-13",
-      "state": "complete",
+      "worktree": null,
+      "state": "merged",
       "startedAt": "2026-01-25T12:00:00Z",
       "completedAt": "2026-01-25T12:08:00Z",
+      "mergedAt": "2026-01-26T03:08:04Z",
       "pr": "https://github.com/ACTO-LLC/tool-share/pull/86"
     },
     "16": {
       "title": "[Track C] Dashboard Page",
       "area": "Frontend/Dashboard",
       "branch": "feat/16-dashboard-page",
-      "worktree": "tool-share-16",
-      "state": "complete",
+      "worktree": null,
+      "state": "merged",
       "startedAt": "2026-01-25T12:00:00Z",
       "completedAt": "2026-01-25T12:12:00Z",
-      "pr": "https://github.com/ACTO-LLC/tool-share/pull/87"
+      "mergedAt": "2026-01-26T03:20:00Z",
+      "pr": "https://github.com/ACTO-LLC/tool-share/pull/87",
+      "copilotFixes": "https://github.com/ACTO-LLC/tool-share/pull/90"
+    },
+    "10": {
+      "title": "[Track B] Tool CRUD API",
+      "area": "API/Tools",
+      "branch": "feat/10-tool-crud-api",
+      "worktree": "tool-share-10",
+      "state": "complete",
+      "startedAt": "2026-01-26T03:30:00Z",
+      "completedAt": "2026-01-26T03:45:00Z",
+      "pr": "https://github.com/ACTO-LLC/tool-share/pull/91"
+    },
+    "11": {
+      "title": "[Track B] Photo Upload API",
+      "area": "API/Photos",
+      "branch": "feat/11-photo-upload-api",
+      "worktree": "tool-share-11",
+      "state": "complete",
+      "startedAt": "2026-01-26T03:30:00Z",
+      "completedAt": "2026-01-26T03:50:00Z",
+      "pr": "https://github.com/ACTO-LLC/tool-share/pull/93"
+    },
+    "22": {
+      "title": "[Track C] Reservation Detail Page",
+      "area": "Frontend/Reservations",
+      "branch": "feat/22-reservation-detail-page",
+      "worktree": "tool-share-22",
+      "state": "complete",
+      "startedAt": "2026-01-26T03:30:00Z",
+      "completedAt": "2026-01-26T03:55:00Z",
+      "pr": "https://github.com/ACTO-LLC/tool-share/pull/95"
     }
   }
 }

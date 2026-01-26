@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ACTO Configuration",
+  "description": "Project-specific configuration for ACTO skills",
+  "type": "object",
+  "properties": {
+    "build": {
+      "type": "object",
+      "description": "Build configuration",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to build the project",
+          "examples": ["npm run build", "cargo build", "go build ./..."]
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Directory to run build command from (relative to repo root)",
+          "examples": [".", "client", "packages/app"]
+        }
+      }
+    },
+    "test": {
+      "type": "object",
+      "description": "Test configuration",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to run tests",
+          "examples": ["npm test", "npx playwright test", "cargo test"]
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Directory to run test command from (relative to repo root)"
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables to set when running tests",
+          "additionalProperties": { "type": "string" },
+          "examples": [{ "VITE_BYPASS_AUTH": "true", "CI": "true" }]
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Default test file pattern (can be overridden per-issue)",
+          "examples": ["**/*.spec.ts", "tests/"]
+        }
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "description": "Git worktree configuration",
+      "properties": {
+        "parentDirectory": {
+          "type": "string",
+          "description": "Parent directory for worktrees (absolute path or relative to repo)",
+          "default": "..",
+          "examples": ["C:/source", "/home/user/projects", ".."]
+        },
+        "namingPattern": {
+          "type": "string",
+          "description": "Pattern for worktree directory names. Supports {repo} and {issue} placeholders",
+          "default": "{repo}-{issue}",
+          "examples": ["{repo}-{issue}", "{repo}/worktrees/{issue}"]
+        },
+        "baseBranch": {
+          "type": "string",
+          "description": "Base branch to create worktrees from",
+          "default": "main",
+          "examples": ["main", "master", "develop"]
+        }
+      }
+    },
+    "github": {
+      "type": "object",
+      "description": "GitHub-specific configuration",
+      "properties": {
+        "copilotReview": {
+          "type": "boolean",
+          "description": "Whether to request Copilot review on PRs",
+          "default": true
+        },
+        "autoMergeMethod": {
+          "type": "string",
+          "enum": ["squash", "merge", "rebase"],
+          "description": "Merge method for auto-merging PRs",
+          "default": "squash"
+        },
+        "deleteBranchOnMerge": {
+          "type": "boolean",
+          "description": "Delete branch after merging PR",
+          "default": true
+        }
+      }
+    },
+    "loop": {
+      "type": "object",
+      "description": "ACTO loop behavior configuration",
+      "properties": {
+        "maxIterations": {
+          "type": "integer",
+          "description": "Maximum iterations before escape",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "description": "Maximum attempts on the same error",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10
+        },
+        "stuckTimeoutMinutes": {
+          "type": "integer",
+          "description": "Minutes before considering loop stuck on same error",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 30
+        },
+        "maxReviewIterations": {
+          "type": "integer",
+          "description": "Maximum review-fix cycles in Phase 4",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10
+        }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "description": "ACTO batch configuration",
+      "properties": {
+        "maxConcurrent": {
+          "type": "integer",
+          "description": "Maximum concurrent issues to process",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 5
+        },
+        "excludeLabels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Labels to exclude from batch selection",
+          "default": ["blocked", "wontfix", "on-hold"]
+        },
+        "preferLabels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Labels to prioritize in batch selection",
+          "default": ["good-first-issue", "quick-fix"]
+        }
+      }
+    },
+    "status": {
+      "type": "object",
+      "description": "Status tracking configuration",
+      "properties": {
+        "filePath": {
+          "type": "string",
+          "description": "Path to status file (relative to repo root)",
+          "default": ".claude/acto-status.json"
+        },
+        "staleThresholdMinutes": {
+          "type": "integer",
+          "description": "Minutes before marking a running loop as stale",
+          "default": 10,
+          "minimum": 5,
+          "maximum": 60
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

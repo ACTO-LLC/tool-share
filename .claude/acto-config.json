@@ -1,0 +1,39 @@
+{
+  "$schema": "./acto-config.schema.json",
+  "build": {
+    "command": "npm run build",
+    "workingDirectory": "client"
+  },
+  "test": {
+    "command": "npx playwright test",
+    "workingDirectory": ".",
+    "env": {
+      "VITE_BYPASS_AUTH": "true"
+    }
+  },
+  "worktree": {
+    "parentDirectory": "..",
+    "namingPattern": "{repo}-{issue}",
+    "baseBranch": "master"
+  },
+  "github": {
+    "copilotReview": true,
+    "autoMergeMethod": "squash",
+    "deleteBranchOnMerge": true
+  },
+  "loop": {
+    "maxIterations": 20,
+    "maxAttempts": 3,
+    "stuckTimeoutMinutes": 5,
+    "maxReviewIterations": 3
+  },
+  "batch": {
+    "maxConcurrent": 3,
+    "excludeLabels": ["blocked", "wontfix", "on-hold"],
+    "preferLabels": ["good-first-issue", "quick-fix"]
+  },
+  "status": {
+    "filePath": ".claude/acto-status.json",
+    "staleThresholdMinutes": 10
+  }
+}

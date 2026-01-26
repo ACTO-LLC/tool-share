@@ -19,6 +19,7 @@ import { AuthenticatedUser } from '../middleware/auth';
 import * as dabService from '../services/dabService';
 import * as notificationService from '../services/notificationService';
 import { blobStorageService } from '../services/blobStorageService';
+import { processLoanPhoto, getMimeType } from '../services/imageProcessingService';
 
 // Request/Response interfaces
 interface CreateReservationRequest {
@@ -784,12 +785,16 @@ export class ReservationsController extends Controller {
       }
     }
 
+    // Process image (resize and compress)
+    const processedImage = await processLoanPhoto(file.buffer);
+    const contentType = getMimeType(processedImage.format);
+
     // Upload file to blob storage
     const uploadResult = await blobStorageService.uploadFile(
-      file.buffer,
-      file.originalname,
+      processedImage.buffer,
+      file.originalname.replace(/\.\w+$/, `.${processedImage.format}`),
       `loans/${id}/${type}`,
-      file.mimetype
+      contentType
     );
 
     // Generate SAS URL for access

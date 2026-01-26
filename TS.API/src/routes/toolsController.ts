@@ -20,6 +20,10 @@ import { AuthenticatedUser } from '../middleware/auth';
 import { lookupUpc, searchProducts } from '../services/upcService';
 import { dabClient, Tool, CreateToolInput, UpdateToolInput } from '../services/dabClient';
 import { blobStorageService } from '../services/blobStorageService';
+import { processToolPhoto, getMimeType } from '../services/imageProcessingService';
+
+// Photo upload limits
+const MAX_PHOTOS_PER_TOOL = 5;
 
 // ==================== Response Interfaces ====================
 
@@ -615,13 +619,24 @@ export class ToolsController extends Controller {
       throw new Error('File too large. Maximum size: 5MB');
     }
 
+    // Check photo count limit (1-5 photos per tool)
+    const currentPhotoCount = tool.photos?.length || 0;
+    if (currentPhotoCount >= MAX_PHOTOS_PER_TOOL) {
+      this.setStatus(400);
+      throw new Error(`Maximum ${MAX_PHOTOS_PER_TOOL} photos allowed per tool. Please delete a photo first.`);
+    }
+
+    // Process image (resize and compress)
+    const processedImage = await processToolPhoto(file.buffer);
+    const contentType = getMimeType(processedImage.format);
+
     // Upload to blob storage
     const folder = `tools/${id}`;
     const uploadResult = await blobStorageService.uploadFile(
-      file.buffer,
-      file.originalname,
+      processedImage.buffer,
+      file.originalname.replace(/\.\w+$/, `.${processedImage.format}`),
       folder,
-      file.mimetype
+      contentType
     );
 
     // Check if this should be primary

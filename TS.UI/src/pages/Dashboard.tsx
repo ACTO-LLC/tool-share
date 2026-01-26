@@ -13,7 +13,6 @@ import {
   Avatar,
   Chip,
   Divider,
-  Skeleton,
   Alert,
   useTheme,
   useMediaQuery,
@@ -36,6 +35,10 @@ import {
 } from '../data/mockData';
 import { reservationApi, Reservation, DashboardStats } from '../services/api';
 import { Tool } from '../types';
+import StatCard from '../components/StatCard';
+import UpcomingReservations from '../components/UpcomingReservations';
+import RecentActivity from '../components/RecentActivity';
+import { DashboardSkeleton } from '../components/LoadingSkeletons';
 
 // Check if we should use real API
 const USE_REAL_API = import.meta.env.VITE_USE_REAL_API === 'true';
@@ -135,54 +138,8 @@ export default function Dashboard() {
     loadDashboardData();
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return 'success';
-      case 'pending':
-        return 'warning';
-      case 'active':
-        return 'info';
-      case 'completed':
-        return 'default';
-      case 'cancelled':
-      case 'declined':
-        return 'error';
-      default:
-        return 'default';
-    }
-  };
-
   if (loading) {
-    return (
-      <Box>
-        <Skeleton
-          variant="text"
-          width={isMobile ? 200 : 300}
-          height={isMobile ? 36 : 48}
-          sx={{ mb: { xs: 2, sm: 3 } }}
-        />
-        <Grid
-          container
-          spacing={{ xs: 1.5, sm: 3 }}
-          sx={{ mb: { xs: 2, sm: 4 } }}
-        >
-          {[1, 2, 3].map((i) => (
-            <Grid item xs={4} key={i}>
-              <Skeleton variant="rectangular" height={isMobile ? 100 : 150} />
-            </Grid>
-          ))}
-        </Grid>
-        <Grid container spacing={{ xs: 1.5, sm: 3 }}>
-          <Grid item xs={12} md={6}>
-            <Skeleton variant="rectangular" height={isMobile ? 150 : 200} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Skeleton variant="rectangular" height={isMobile ? 150 : 200} />
-          </Grid>
-        </Grid>
-      </Box>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error) {
@@ -224,116 +181,34 @@ export default function Dashboard() {
         sx={{ mb: { xs: 2, sm: 4 } }}
       >
         <Grid item xs={4}>
-          <Card
-            sx={{
-              cursor: 'pointer',
-              '&:hover': { boxShadow: 4 },
-              '&:active': { transform: 'scale(0.98)' },
-              minHeight: 48,
-            }}
+          <StatCard
+            icon={Build}
+            value={stats.toolsListed}
+            label="Tools Listed"
+            iconColor="primary.main"
             onClick={() => navigate('/my-tools')}
-          >
-            <CardContent
-              sx={{
-                textAlign: 'center',
-                p: { xs: 1, sm: 2 },
-                '&:last-child': { pb: { xs: 1, sm: 2 } },
-              }}
-            >
-              <Build
-                sx={{
-                  fontSize: { xs: 28, sm: 48 },
-                  color: 'primary.main',
-                  mb: { xs: 0.5, sm: 1 },
-                }}
-              />
-              <Typography variant={isMobile ? 'h5' : 'h3'}>
-                {stats.toolsListed}
-              </Typography>
-              <Typography
-                color="text.secondary"
-                variant={isMobile ? 'caption' : 'body1'}
-              >
-                Tools Listed
-              </Typography>
-            </CardContent>
-          </Card>
+          />
         </Grid>
         <Grid item xs={4}>
-          <Card
-            sx={{
-              cursor: 'pointer',
-              '&:hover': { boxShadow: 4 },
-              '&:active': { transform: 'scale(0.98)' },
-              minHeight: 48,
-            }}
+          <StatCard
+            icon={CalendarMonth}
+            value={stats.activeLoans}
+            label="Active Loans"
+            iconColor="success.main"
             onClick={() => navigate('/reservations')}
-          >
-            <CardContent
-              sx={{
-                textAlign: 'center',
-                p: { xs: 1, sm: 2 },
-                '&:last-child': { pb: { xs: 1, sm: 2 } },
-              }}
-            >
-              <CalendarMonth
-                sx={{
-                  fontSize: { xs: 28, sm: 48 },
-                  color: 'success.main',
-                  mb: { xs: 0.5, sm: 1 },
-                }}
-              />
-              <Typography variant={isMobile ? 'h5' : 'h3'}>
-                {stats.activeLoans}
-              </Typography>
-              <Typography
-                color="text.secondary"
-                variant={isMobile ? 'caption' : 'body1'}
-              >
-                Active Loans
-              </Typography>
-            </CardContent>
-          </Card>
+          />
         </Grid>
         <Grid item xs={4}>
-          <Card
-            sx={{
-              cursor: 'pointer',
-              '&:hover': { boxShadow: 4 },
-              '&:active': { transform: 'scale(0.98)' },
-              bgcolor:
-                stats.pendingRequests > 0
-                  ? 'warning.light'
-                  : 'background.paper',
-              minHeight: 48,
-            }}
+          <StatCard
+            icon={Pending}
+            value={stats.pendingRequests}
+            label="Pending"
+            iconColor="warning.main"
+            backgroundColor={
+              stats.pendingRequests > 0 ? 'warning.light' : undefined
+            }
             onClick={() => navigate('/reservations')}
-          >
-            <CardContent
-              sx={{
-                textAlign: 'center',
-                p: { xs: 1, sm: 2 },
-                '&:last-child': { pb: { xs: 1, sm: 2 } },
-              }}
-            >
-              <Pending
-                sx={{
-                  fontSize: { xs: 28, sm: 48 },
-                  color: 'warning.main',
-                  mb: { xs: 0.5, sm: 1 },
-                }}
-              />
-              <Typography variant={isMobile ? 'h5' : 'h3'}>
-                {stats.pendingRequests}
-              </Typography>
-              <Typography
-                color="text.secondary"
-                variant={isMobile ? 'caption' : 'body1'}
-              >
-                Pending
-              </Typography>
-            </CardContent>
-          </Card>
+          />
         </Grid>
       </Grid>
 
@@ -371,6 +246,11 @@ export default function Dashboard() {
               </Box>
             </CardContent>
           </Card>
+        </Grid>
+
+        {/* Recent Activity (Phase 2 placeholder) */}
+        <Grid item xs={12} md={6}>
+          <RecentActivity />
         </Grid>
 
         {/* Pending Requests for My Tools */}
@@ -444,83 +324,8 @@ export default function Dashboard() {
         )}
 
         {/* Upcoming Reservations */}
-        <Grid item xs={12} md={pendingRequests.length > 0 ? 12 : 6}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-              <Typography
-                variant="h6"
-                gutterBottom
-                sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}
-              >
-                Upcoming Reservations
-              </Typography>
-              {upcomingReservations.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: { xs: 2, sm: 3 } }}>
-                  <Typography
-                    color="text.secondary"
-                    gutterBottom
-                    variant={isMobile ? 'body2' : 'body1'}
-                  >
-                    No upcoming reservations
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Search />}
-                    onClick={() => navigate('/browse')}
-                    sx={{ minHeight: 48 }}
-                  >
-                    Find Tools to Borrow
-                  </Button>
-                </Box>
-              ) : (
-                <List disablePadding>
-                  {upcomingReservations.map((reservation, index) => (
-                    <Box key={reservation.id}>
-                      {index > 0 && <Divider />}
-                      <ListItem
-                        sx={{
-                          px: 0,
-                          py: { xs: 1, sm: 1.5 },
-                          cursor: 'pointer',
-                          minHeight: 48,
-                        }}
-                        onClick={() =>
-                          navigate(`/reservations/${reservation.id}`)
-                        }
-                      >
-                        <ListItemAvatar>
-                          <Avatar
-                            src={reservation.tool?.photos?.[0]?.url}
-                            variant="rounded"
-                            sx={{
-                              width: { xs: 36, sm: 40 },
-                              height: { xs: 36, sm: 40 },
-                            }}
-                          >
-                            <Handyman sx={{ fontSize: { xs: 20, sm: 24 } }} />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={reservation.tool?.name}
-                          secondary={`${format(parseISO(reservation.startDate), 'MMM d')} - ${format(parseISO(reservation.endDate), isMobile ? 'MMM d' : 'MMM d, yyyy')}`}
-                          primaryTypographyProps={{
-                            variant: isMobile ? 'body2' : 'body1',
-                            noWrap: true,
-                          }}
-                          secondaryTypographyProps={{ variant: 'caption' }}
-                        />
-                        <Chip
-                          label={reservation.status}
-                          size="small"
-                          color={getStatusColor(reservation.status)}
-                        />
-                      </ListItem>
-                    </Box>
-                  ))}
-                </List>
-              )}
-            </CardContent>
-          </Card>
+        <Grid item xs={12} md={pendingRequests.length > 0 ? 6 : 12}>
+          <UpcomingReservations reservations={upcomingReservations} />
         </Grid>
 
         {/* My Tools Quick View */}

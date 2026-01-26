@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 
-// Mock user for local development
+// Mock user for local development - matches seed data user "test-user-1" (John Doe)
 export const MOCK_USER = {
-  id: 'mock-user-001',
-  name: 'Dev User',
-  email: 'dev@localhost.com',
-  username: 'devuser',
+  id: 'test-user-1',
+  name: 'John Doe',
+  email: 'john@example.com',
+  username: 'johndoe',
 };
 
 // Mock account that mimics MSAL AccountInfo
@@ -55,18 +55,42 @@ interface MockAuthProviderProps {
   children: ReactNode;
 }
 
+const MOCK_AUTH_STORAGE_KEY = 'mock_auth_authenticated';
+
 export function MockAuthProvider({ children }: MockAuthProviderProps) {
-  // Auto-login in E2E test mode when a real token is provided
-  const isE2EWithToken = import.meta.env.VITE_E2E_TEST === 'true' && import.meta.env.VITE_E2E_ACCESS_TOKEN;
-  const [isAuthenticated, setIsAuthenticated] = useState(isE2EWithToken ? true : false);
+  // Auto-login in E2E test mode (no manual sign-in required for tests)
+  const isE2ETestMode = import.meta.env.VITE_E2E_TEST === 'true';
+
+  // Initialize from localStorage to persist across page navigations
+  const getInitialAuth = () => {
+    // Auto-authenticate in E2E test mode
+    if (isE2ETestMode) return true;
+    try {
+      return localStorage.getItem(MOCK_AUTH_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  };
+
+  const [isAuthenticated, setIsAuthenticated] = useState(getInitialAuth);
 
   const login = useCallback(() => {
     setIsAuthenticated(true);
+    try {
+      localStorage.setItem(MOCK_AUTH_STORAGE_KEY, 'true');
+    } catch {
+      // localStorage not available
+    }
     console.log('[MockAuth] User logged in:', MOCK_USER.email);
   }, []);
 
   const logout = useCallback(() => {
     setIsAuthenticated(false);
+    try {
+      localStorage.removeItem(MOCK_AUTH_STORAGE_KEY);
+    } catch {
+      // localStorage not available
+    }
     console.log('[MockAuth] User logged out');
   }, []);
 

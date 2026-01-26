@@ -79,25 +79,30 @@ export default function MyReservations() {
 
   // Load reservations
   const loadReservations = useCallback(async () => {
+    console.log('[MyReservations] loadReservations called, USE_REAL_API:', USE_REAL_API);
     setLoading(true);
     setError(null);
 
     try {
       if (USE_REAL_API) {
         // Fetch from real API
+        console.log('[MyReservations] Fetching from real API...');
         const [borrowerData, lenderData] = await Promise.all([
           reservationApi.list({ role: 'borrower' }),
           reservationApi.list({ role: 'lender' }),
         ]);
+        console.log('[MyReservations] Borrower reservations:', borrowerData);
+        console.log('[MyReservations] Lender reservations:', lenderData);
         setBorrowerReservations(borrowerData.items);
         setLenderReservations(lenderData.items);
       } else {
         // Use mock data
+        console.log('[MyReservations] Using mock data');
         setBorrowerReservations(getReservationsByBorrower(mockCurrentUser.id));
         setLenderReservations(getReservationsForOwner(mockCurrentUser.id));
       }
     } catch (err) {
-      console.error('Failed to load reservations:', err);
+      console.error('[MyReservations] Failed to load reservations:', err);
       setError('Failed to load reservations. Please try again.');
     } finally {
       setLoading(false);
@@ -119,32 +124,45 @@ export default function MyReservations() {
   const handleConfirmAction = async () => {
     if (!actionDialog.reservation || !actionDialog.action) return;
 
+    console.log('[MyReservations] handleConfirmAction called:', {
+      action: actionDialog.action,
+      reservationId: actionDialog.reservation.id,
+      useRealApi: USE_REAL_API,
+      note: ownerNote,
+    });
+
     setActionLoading(true);
     try {
       const id = actionDialog.reservation.id;
 
       if (USE_REAL_API) {
         // Call real API
+        console.log('[MyReservations] Calling real API for action:', actionDialog.action);
         switch (actionDialog.action) {
           case 'approve':
-            await reservationApi.approve(id, ownerNote || undefined);
+            const approveResult = await reservationApi.approve(id, ownerNote || undefined);
+            console.log('[MyReservations] Approve result:', approveResult);
             break;
           case 'decline':
-            await reservationApi.decline(id, ownerNote || 'No reason provided');
+            const declineResult = await reservationApi.decline(id, ownerNote || 'No reason provided');
+            console.log('[MyReservations] Decline result:', declineResult);
             break;
           case 'cancel':
-            await reservationApi.cancel(id, ownerNote || undefined);
+            const cancelResult = await reservationApi.cancel(id, ownerNote || undefined);
+            console.log('[MyReservations] Cancel result:', cancelResult);
             break;
           case 'pickup':
-            await reservationApi.pickup(id, ownerNote || undefined);
+            const pickupResult = await reservationApi.pickup(id, ownerNote || undefined);
+            console.log('[MyReservations] Pickup result:', pickupResult);
             break;
           case 'return':
-            await reservationApi.return(id, ownerNote || undefined);
+            const returnResult = await reservationApi.return(id, ownerNote || undefined);
+            console.log('[MyReservations] Return result:', returnResult);
             break;
         }
       } else {
         // Mock: just log the action
-        console.log('Action:', actionDialog.action, 'Reservation:', id, 'Note:', ownerNote);
+        console.log('[MyReservations] Mock mode - action not sent to API:', actionDialog.action, 'Reservation:', id, 'Note:', ownerNote);
       }
 
       setSnackbar({
@@ -154,10 +172,12 @@ export default function MyReservations() {
       });
 
       // Reload reservations to get updated data
+      console.log('[MyReservations] Action succeeded, reloading reservations...');
       await loadReservations();
     } catch (err) {
-      console.error('Action failed:', err);
+      console.error('[MyReservations] Action failed:', err);
       const message = err instanceof ApiError ? err.message : 'Action failed. Please try again.';
+      console.error('[MyReservations] Error message:', message);
       setSnackbar({
         open: true,
         message,

@@ -1,14 +1,14 @@
 import { Tool, User, Reservation, Circle, CircleMember } from '../types';
 
-// Mock current user
+// Mock current user - matches seed data "test-user-1" (John Doe)
 export const mockCurrentUser: User = {
   id: '11111111-1111-1111-1111-111111111111',
   externalId: 'test-user-1',
-  displayName: 'Test User',
-  email: 'test@example.com',
+  displayName: 'John Doe',
+  email: 'john@example.com',
   city: 'San Francisco',
   state: 'CA',
-  reputationScore: 4.8,
+  reputationScore: 4.75,
   subscriptionStatus: 'active',
   createdAt: '2024-01-01T00:00:00Z',
 };

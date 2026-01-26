@@ -252,11 +252,11 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
   });
 }
 
-// Mock user for development bypass mode
+// Mock user for development bypass mode - matches seed data user "test-user-1" (John Doe)
 const MOCK_DEV_USER: AuthenticatedUser = {
-  id: 'mock-user-001',
-  email: 'dev@localhost.com',
-  name: 'Dev User',
+  id: 'test-user-1',
+  email: 'john@example.com',
+  name: 'John Doe',
 };
 
 /**

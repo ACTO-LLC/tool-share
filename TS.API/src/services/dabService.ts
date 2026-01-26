@@ -1576,3 +1576,58 @@ export async function getReviewsByUser(userId: string, authToken?: string): Prom
 
   return result.reviews.items;
 }
+
+/**
+ * Check if a user shares at least one circle with a tool
+ * This determines if the user is allowed to request a reservation
+ */
+export async function userSharesCircleWithTool(
+  userId: string,
+  toolId: string,
+  authToken?: string
+): Promise<boolean> {
+  // Get all circles the user is a member of
+  const userCirclesQuery = `
+    query GetUserCircles($userId: String!) {
+      circleMembers(filter: { userId: { eq: $userId } }) {
+        items {
+          circleId
+        }
+      }
+    }
+  `;
+
+  const userCirclesResult = await executeGraphQL<{
+    circleMembers: { items: Array<{ circleId: string }> };
+  }>(userCirclesQuery, { userId }, authToken);
+
+  const userCircleIds = new Set(userCirclesResult.circleMembers.items.map(m => m.circleId));
+
+  if (userCircleIds.size === 0) {
+    return false;
+  }
+
+  // Get all circles the tool is shared with
+  const toolCirclesQuery = `
+    query GetToolCircles($toolId: String!) {
+      toolCircles(filter: { toolId: { eq: $toolId } }) {
+        items {
+          circleId
+        }
+      }
+    }
+  `;
+
+  const toolCirclesResult = await executeGraphQL<{
+    toolCircles: { items: Array<{ circleId: string }> };
+  }>(toolCirclesQuery, { toolId }, authToken);
+
+  // Check if there's any intersection
+  for (const toolCircle of toolCirclesResult.toolCircles.items) {
+    if (userCircleIds.has(toolCircle.circleId)) {
+      return true;
+    }
+  }
+
+  return false;
+}

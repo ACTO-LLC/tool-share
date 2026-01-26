@@ -220,6 +220,13 @@ export class ReservationsController extends Controller {
       throw new Error('You cannot reserve your own tool.');
     }
 
+    // Check if borrower shares a circle with the tool
+    const sharesCircle = await dabService.userSharesCircleWithTool(dbUser.id, body.toolId, authToken);
+    if (!sharesCircle) {
+      this.setStatus(403);
+      throw new Error('You can only request tools from circles you are a member of.');
+    }
+
     // Check advance notice requirement
     const daysDifference = Math.ceil((startDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     if (daysDifference < tool.advanceNoticeDays) {

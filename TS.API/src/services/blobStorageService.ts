@@ -4,9 +4,13 @@ import {
   BlobSASPermissions,
   generateBlobSASQueryParameters,
   StorageSharedKeyCredential,
+  BlobServiceProperties,
 } from '@azure/storage-blob';
 import { config } from '../config/env';
 import { v4 as uuidv4 } from 'uuid';
+
+// Container type enum for type safety
+export type ContainerType = 'tools' | 'loans';
 
 // Interface for upload result
 export interface BlobUploadResult {
@@ -20,15 +24,43 @@ export interface SasUrlResult {
   expiresAt: Date;
 }
 
+// Interface for CORS configuration
+export interface CorsConfig {
+  allowedOrigins: string[];
+  allowedMethods: string[];
+  allowedHeaders: string[];
+  exposedHeaders: string[];
+  maxAgeInSeconds: number;
+}
+
 class BlobStorageService {
-  private containerClient: ContainerClient | null = null;
+  private containerClients: Map<ContainerType, ContainerClient> = new Map();
+  private blobServiceClient: BlobServiceClient | null = null;
   private accountName: string = '';
   private accountKey: string = '';
   private blobEndpoint: string = '';
+  private initialized: boolean = false;
 
-  private initialize(): ContainerClient {
-    if (this.containerClient) {
-      return this.containerClient;
+  /**
+   * Get the container name for a given container type
+   */
+  private getContainerName(containerType: ContainerType): string {
+    switch (containerType) {
+      case 'tools':
+        return config.AZURE_STORAGE_CONTAINER_NAME;
+      case 'loans':
+        return config.AZURE_STORAGE_LOAN_CONTAINER_NAME;
+      default:
+        throw new Error(`Unknown container type: ${containerType}`);
+    }
+  }
+
+  /**
+   * Initialize the blob service client and parse connection string
+   */
+  private initializeService(): BlobServiceClient {
+    if (this.blobServiceClient && this.initialized) {
+      return this.blobServiceClient;
     }
 
     const connectionString = config.AZURE_STORAGE_CONNECTION_STRING;
@@ -50,10 +82,33 @@ class BlobStorageService {
     // BlobEndpoint is specified for Azurite local development
     this.blobEndpoint = parts['BlobEndpoint'] || '';
 
-    const blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-    this.containerClient = blobServiceClient.getContainerClient(config.AZURE_STORAGE_CONTAINER_NAME);
+    this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
+    this.initialized = true;
 
-    return this.containerClient;
+    return this.blobServiceClient;
+  }
+
+  /**
+   * Get or create a container client for the specified container type
+   */
+  private getContainerClient(containerType: ContainerType = 'tools'): ContainerClient {
+    // Check cache first
+    const cachedClient = this.containerClients.get(containerType);
+    if (cachedClient) {
+      return cachedClient;
+    }
+
+    // Initialize service if needed
+    const serviceClient = this.initializeService();
+
+    // Get container name and create client
+    const containerName = this.getContainerName(containerType);
+    const containerClient = serviceClient.getContainerClient(containerName);
+
+    // Cache for future use
+    this.containerClients.set(containerType, containerClient);
+
+    return containerClient;
   }
 
   /**
@@ -62,15 +117,17 @@ class BlobStorageService {
    * @param originalName - Original filename for extension extraction
    * @param folder - Folder path within the container (e.g., 'tools/{toolId}')
    * @param contentType - MIME type of the file
+   * @param containerType - Which container to upload to (defaults to 'tools')
    * @returns Upload result with blob name and URL
    */
   async uploadFile(
     buffer: Buffer,
     originalName: string,
     folder: string,
-    contentType: string
+    contentType: string,
+    containerType: ContainerType = 'tools'
   ): Promise<BlobUploadResult> {
-    const container = this.initialize();
+    const container = this.getContainerClient(containerType);
 
     // Extract file extension
     const ext = originalName.split('.').pop()?.toLowerCase() || 'jpg';
@@ -100,9 +157,10 @@ class BlobStorageService {
   /**
    * Delete a blob from Azure Blob Storage
    * @param blobName - The full blob name/path
+   * @param containerType - Which container to delete from (defaults to 'tools')
    */
-  async deleteFile(blobName: string): Promise<void> {
-    const container = this.initialize();
+  async deleteFile(blobName: string, containerType: ContainerType = 'tools'): Promise<void> {
+    const container = this.getContainerClient(containerType);
     const blockBlobClient = container.getBlockBlobClient(blobName);
     await blockBlobClient.deleteIfExists();
   }
@@ -110,16 +168,22 @@ class BlobStorageService {
   /**
    * Generate a SAS URL for a blob with read access
    * @param blobName - The full blob name/path
-   * @param expiryMinutes - How long the URL should be valid (default: 60 minutes)
+   * @param expiryMinutes - How long the URL should be valid (default: 60 minutes = 1 hour)
+   * @param containerType - Which container the blob is in (defaults to 'tools')
    * @returns SAS URL and expiration time
    */
-  generateSasUrl(blobName: string, expiryMinutes: number = 60): SasUrlResult {
-    this.initialize();
+  generateSasUrl(
+    blobName: string,
+    expiryMinutes: number = 60,
+    containerType: ContainerType = 'tools'
+  ): SasUrlResult {
+    this.initializeService();
 
     if (!this.accountName || !this.accountKey) {
       throw new Error('Storage account credentials not available');
     }
 
+    const containerName = this.getContainerName(containerType);
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + expiryMinutes);
 
@@ -130,7 +194,7 @@ class BlobStorageService {
 
     const sasToken = generateBlobSASQueryParameters(
       {
-        containerName: config.AZURE_STORAGE_CONTAINER_NAME,
+        containerName,
         blobName,
         permissions: BlobSASPermissions.parse('r'), // Read-only
         expiresOn: expiresAt,
@@ -143,9 +207,65 @@ class BlobStorageService {
     let baseUrl: string;
     if (this.blobEndpoint) {
       // BlobEndpoint already includes the account name, e.g., http://127.0.0.1:10000/devstoreaccount1
-      baseUrl = `${this.blobEndpoint}/${config.AZURE_STORAGE_CONTAINER_NAME}/${blobName}`;
+      baseUrl = `${this.blobEndpoint}/${containerName}/${blobName}`;
     } else {
-      baseUrl = `https://${this.accountName}.blob.core.windows.net/${config.AZURE_STORAGE_CONTAINER_NAME}/${blobName}`;
+      baseUrl = `https://${this.accountName}.blob.core.windows.net/${containerName}/${blobName}`;
+    }
+
+    const url = `${baseUrl}?${sasToken}`;
+
+    return {
+      url,
+      expiresAt,
+    };
+  }
+
+  /**
+   * Generate a SAS URL for writing (upload) access
+   * Used for direct browser uploads
+   * @param blobName - The full blob name/path
+   * @param expiryMinutes - How long the URL should be valid (default: 60 minutes = 1 hour)
+   * @param containerType - Which container the blob will be in (defaults to 'tools')
+   * @returns SAS URL and expiration time
+   */
+  generateUploadSasUrl(
+    blobName: string,
+    expiryMinutes: number = 60,
+    containerType: ContainerType = 'tools'
+  ): SasUrlResult {
+    this.initializeService();
+
+    if (!this.accountName || !this.accountKey) {
+      throw new Error('Storage account credentials not available');
+    }
+
+    const containerName = this.getContainerName(containerType);
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + expiryMinutes);
+
+    const sharedKeyCredential = new StorageSharedKeyCredential(
+      this.accountName,
+      this.accountKey
+    );
+
+    // Create (c) and Write (w) permissions for upload
+    const sasToken = generateBlobSASQueryParameters(
+      {
+        containerName,
+        blobName,
+        permissions: BlobSASPermissions.parse('cw'),
+        expiresOn: expiresAt,
+      },
+      sharedKeyCredential
+    ).toString();
+
+    // Use BlobEndpoint if specified (for Azurite local development)
+    // Otherwise use the standard Azure cloud URL format
+    let baseUrl: string;
+    if (this.blobEndpoint) {
+      baseUrl = `${this.blobEndpoint}/${containerName}/${blobName}`;
+    } else {
+      baseUrl = `https://${this.accountName}.blob.core.windows.net/${containerName}/${blobName}`;
     }
 
     const url = `${baseUrl}?${sasToken}`;
@@ -159,19 +279,92 @@ class BlobStorageService {
   /**
    * Check if a blob exists
    * @param blobName - The full blob name/path
+   * @param containerType - Which container to check (defaults to 'tools')
    */
-  async exists(blobName: string): Promise<boolean> {
-    const container = this.initialize();
+  async exists(blobName: string, containerType: ContainerType = 'tools'): Promise<boolean> {
+    const container = this.getContainerClient(containerType);
     const blockBlobClient = container.getBlockBlobClient(blobName);
     return blockBlobClient.exists();
   }
 
   /**
-   * Ensure the container exists (useful for initialization)
+   * Ensure a container exists (useful for initialization)
+   * @param containerType - Which container to ensure exists
    */
-  async ensureContainerExists(): Promise<void> {
-    const container = this.initialize();
-    await container.createIfNotExists();
+  async ensureContainerExists(containerType: ContainerType = 'tools'): Promise<void> {
+    const container = this.getContainerClient(containerType);
+    await container.createIfNotExists({
+      access: undefined, // Private access (no public access)
+    });
+  }
+
+  /**
+   * Ensure all containers exist (useful for application startup)
+   */
+  async ensureAllContainersExist(): Promise<void> {
+    await Promise.all([
+      this.ensureContainerExists('tools'),
+      this.ensureContainerExists('loans'),
+    ]);
+  }
+
+  /**
+   * Configure CORS for the storage account
+   * This enables browser uploads directly to blob storage
+   * @param corsConfig - CORS configuration options
+   */
+  async configureCors(corsConfig: CorsConfig): Promise<void> {
+    const serviceClient = this.initializeService();
+
+    const properties: BlobServiceProperties = {
+      cors: [
+        {
+          allowedOrigins: corsConfig.allowedOrigins.join(','),
+          allowedMethods: corsConfig.allowedMethods.join(','),
+          allowedHeaders: corsConfig.allowedHeaders.join(','),
+          exposedHeaders: corsConfig.exposedHeaders.join(','),
+          maxAgeInSeconds: corsConfig.maxAgeInSeconds,
+        },
+      ],
+    };
+
+    await serviceClient.setProperties(properties);
+  }
+
+  /**
+   * Get the default CORS configuration for browser uploads
+   * Allows uploads from the configured app origin
+   */
+  getDefaultCorsConfig(): CorsConfig {
+    return {
+      allowedOrigins: [config.CORS_ORIGIN],
+      allowedMethods: ['GET', 'PUT', 'OPTIONS', 'HEAD'],
+      allowedHeaders: ['*'],
+      exposedHeaders: ['ETag', 'Content-Length', 'Content-Type'],
+      maxAgeInSeconds: 3600, // 1 hour
+    };
+  }
+
+  /**
+   * Get the container names for documentation/configuration
+   */
+  getContainerNames(): { tools: string; loans: string } {
+    return {
+      tools: config.AZURE_STORAGE_CONTAINER_NAME,
+      loans: config.AZURE_STORAGE_LOAN_CONTAINER_NAME,
+    };
+  }
+
+  /**
+   * Get account info for testing/verification
+   */
+  getAccountInfo(): { accountName: string; blobEndpoint: string; hasCredentials: boolean } {
+    this.initializeService();
+    return {
+      accountName: this.accountName,
+      blobEndpoint: this.blobEndpoint,
+      hasCredentials: !!(this.accountName && this.accountKey),
+    };
   }
 }
 

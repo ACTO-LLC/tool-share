@@ -789,16 +789,17 @@ export class ReservationsController extends Controller {
     const processedImage = await processLoanPhoto(file.buffer);
     const contentType = getMimeType(processedImage.format);
 
-    // Upload file to blob storage
+    // Upload file to blob storage (using 'loans' container)
     const uploadResult = await blobStorageService.uploadFile(
       processedImage.buffer,
       file.originalname.replace(/\.\w+$/, `.${processedImage.format}`),
       `loans/${id}/${type}`,
-      contentType
+      contentType,
+      'loans' // Use the loans container
     );
 
-    // Generate SAS URL for access
-    const sasUrl = blobStorageService.generateSasUrl(uploadResult.blobName, 60 * 24 * 365); // 1 year expiry
+    // Generate SAS URL for access (1-hour expiry as per spec, regenerated on each access)
+    const sasUrl = blobStorageService.generateSasUrl(uploadResult.blobName, 60, 'loans');
 
     // Create loan photo record
     const loanPhoto = await dabService.createLoanPhoto(

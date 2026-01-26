@@ -14,6 +14,7 @@ process.env.PORT = '3000';
 process.env.DAB_GRAPHQL_URL = 'http://localhost:5000/graphql';
 process.env.AZURE_STORAGE_CONNECTION_STRING = '';
 process.env.AZURE_STORAGE_CONTAINER_NAME = 'tool-photos';
+process.env.AZURE_STORAGE_LOAN_CONTAINER_NAME = 'loan-photos';
 process.env.STRIPE_SECRET_KEY = 'sk_test_mock';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_mock';
 process.env.STRIPE_PRICE_ID = 'price_test_mock';

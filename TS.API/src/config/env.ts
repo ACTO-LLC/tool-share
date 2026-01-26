@@ -30,6 +30,7 @@ export const config = cleanEnv(process.env, {
   // Blob Storage
   AZURE_STORAGE_CONNECTION_STRING: str({ default: '' }),
   AZURE_STORAGE_CONTAINER_NAME: str({ default: 'tool-photos' }),
+  AZURE_STORAGE_LOAN_CONTAINER_NAME: str({ default: 'loan-photos' }),
 
   // Stripe
   STRIPE_SECRET_KEY: str({ default: '' }),

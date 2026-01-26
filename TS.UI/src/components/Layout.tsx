@@ -37,6 +37,7 @@ import {
   MoreHoriz as MoreIcon,
 } from '@mui/icons-material';
 import NotificationBell from './NotificationBell';
+import Footer from './Footer';
 
 const drawerWidth = 240;
 
@@ -302,6 +303,8 @@ export default function Layout() {
         component="main"
         sx={{
           flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
           p: { xs: 2, sm: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
           mt: { xs: '56px', sm: '64px' },
@@ -313,7 +316,10 @@ export default function Layout() {
           overflow: 'auto',
         }}
       >
-        <Outlet />
+        <Box sx={{ flexGrow: 1 }}>
+          <Outlet />
+        </Box>
+        <Footer />
       </Box>
 
       {/* Bottom Navigation - Mobile only */}

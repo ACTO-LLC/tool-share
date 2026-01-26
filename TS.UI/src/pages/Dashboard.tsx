@@ -270,11 +270,19 @@ export default function Dashboard() {
                     <Box key={reservation.id}>
                       {index > 0 && <Divider />}
                       <ListItem
+                        component="button"
                         sx={{
                           px: 0,
                           py: { xs: 1, sm: 1.5 },
                           cursor: 'pointer',
                           minHeight: 48,
+                          border: 'none',
+                          width: '100%',
+                          textAlign: 'left',
+                          bgcolor: 'transparent',
+                          '&:hover': {
+                            bgcolor: 'action.hover',
+                          },
                         }}
                         onClick={() =>
                           navigate(`/reservations/${reservation.id}`)
@@ -296,7 +304,7 @@ export default function Dashboard() {
                           secondary={
                             isMobile
                               ? `${format(parseISO(reservation.startDate), 'MMM d')}`
-                              : `${reservation.borrower?.displayName} - ${format(parseISO(reservation.startDate), 'MMM d')} to ${format(parseISO(reservation.endDate), 'MMM d')}`
+                              : `${reservation.borrower?.displayName || 'Unknown User'} - ${format(parseISO(reservation.startDate), 'MMM d')} to ${format(parseISO(reservation.endDate), 'MMM d')}`
                           }
                           primaryTypographyProps={{
                             variant: isMobile ? 'body2' : 'body1',
@@ -310,6 +318,10 @@ export default function Dashboard() {
                           sx={{
                             minHeight: 36,
                             minWidth: { xs: 60, sm: 80 },
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/reservations/${reservation.id}`);
                           }}
                         >
                           Review

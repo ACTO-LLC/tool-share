@@ -30,12 +30,16 @@ export default function StatCard({
 
   return (
     <Card
+      component={onClick ? 'button' : 'div'}
       sx={{
         cursor: onClick ? 'pointer' : 'default',
         '&:hover': onClick ? { boxShadow: 4 } : undefined,
         '&:active': onClick ? { transform: 'scale(0.98)' } : undefined,
         minHeight: 48,
         bgcolor: backgroundColor || 'background.paper',
+        border: onClick ? 'none' : undefined,
+        textAlign: 'left',
+        width: '100%',
         ...sx,
       }}
       onClick={onClick}

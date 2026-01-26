@@ -120,20 +120,23 @@ export default function UpcomingReservations({
                 <Box key={reservation.id}>
                   {index > 0 && <Divider />}
                   <ListItem
-                    component="button"
                     sx={{
                       px: 0,
                       py: { xs: 1, sm: 1.5 },
                       cursor: 'pointer',
                       minHeight: 48,
                       flexWrap: 'wrap',
-                      border: 'none',
-                      width: '100%',
-                      textAlign: 'left',
-                      bgcolor: 'transparent',
                       '&:hover': {
                         bgcolor: 'action.hover',
                       },
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/reservations/${reservation.id}`);
+                      }
                     }}
                     onClick={() => navigate(`/reservations/${reservation.id}`)}
                   >

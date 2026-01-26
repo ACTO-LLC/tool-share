@@ -749,6 +749,24 @@ export class ReservationsController extends Controller {
       throw new Error('Photo type must be "before" or "after".');
     }
 
+    // Validate file
+    if (!file) {
+      this.setStatus(400);
+      throw new Error('No file provided');
+    }
+
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      this.setStatus(400);
+      throw new Error('Invalid file type. Allowed: JPEG, PNG, GIF, WebP');
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      this.setStatus(400);
+      throw new Error('File too large. Maximum size: 5MB');
+    }
+
     // Get the reservation
     const reservation = await dabService.getReservationById(id, authToken);
     if (!reservation) {
@@ -797,23 +815,37 @@ export class ReservationsController extends Controller {
       contentType
     );
 
-    // Generate SAS URL for access
-    const sasUrl = blobStorageService.generateSasUrl(uploadResult.blobName, 60 * 24 * 365); // 1 year expiry
+    try {
+      // Create loan photo record
+      // Store the blob name for later SAS URL generation (consistent with tool photos)
+      const loanPhoto = await dabService.createLoanPhoto(
+        {
+          reservationId: id,
+          type,
+          url: uploadResult.blobName, // Store blob name, not SAS URL
+          uploadedBy: dbUser.id,
+          notes,
+        },
+        authToken
+      );
 
-    // Create loan photo record
-    const loanPhoto = await dabService.createLoanPhoto(
-      {
-        reservationId: id,
-        type,
-        url: sasUrl.url,
-        uploadedBy: dbUser.id,
-        notes,
-      },
-      authToken
-    );
+      // Generate SAS URL for response
+      const sasUrl = blobStorageService.generateSasUrl(uploadResult.blobName);
 
-    this.setStatus(201);
-    return loanPhoto as LoanPhotoResponse;
+      this.setStatus(201);
+      return {
+        ...loanPhoto,
+        url: sasUrl.url, // Return SAS URL in response
+      } as LoanPhotoResponse;
+    } catch (error) {
+      // Cleanup orphaned blob if database operation fails
+      try {
+        await blobStorageService.deleteFile(uploadResult.blobName);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup orphaned blob:', cleanupError);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -852,11 +884,19 @@ export class ReservationsController extends Controller {
       throw new Error('Not authorized to view this reservation.');
     }
 
+    // Get loan photos from database
+    let photos: LoanPhotoResponse[];
     if (type) {
-      return dabService.getLoanPhotosByType(id, type, authToken) as Promise<LoanPhotoResponse[]>;
+      photos = await dabService.getLoanPhotosByType(id, type, authToken) as LoanPhotoResponse[];
+    } else {
+      photos = await dabService.getLoanPhotos(id, authToken) as LoanPhotoResponse[];
     }
 
-    return dabService.getLoanPhotos(id, authToken) as Promise<LoanPhotoResponse[]>;
+    // Generate SAS URLs for each photo (url field contains blob name)
+    return photos.map(photo => ({
+      ...photo,
+      url: blobStorageService.generateSasUrl(photo.url).url,
+    }));
   }
 
   // ============================================================================

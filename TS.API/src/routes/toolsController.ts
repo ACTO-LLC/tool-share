@@ -644,32 +644,42 @@ export class ToolsController extends Controller {
     const isFirstPhoto = !tool.photos || tool.photos.length === 0;
     const setAsPrimary = shouldBePrimary || isFirstPhoto;
 
-    // Create photo record in database
-    // Store the blob name for deletion later, but use a placeholder URL
-    // The actual SAS URL will be generated when fetching
-    const photoRecord = await dabClient.createToolPhoto(
-      {
-        toolId: id,
-        url: uploadResult.blobName, // Store blob name, not full URL
+    try {
+      // Create photo record in database
+      // Store the blob name for deletion later, but use a placeholder URL
+      // The actual SAS URL will be generated when fetching
+      const photoRecord = await dabClient.createToolPhoto(
+        {
+          toolId: id,
+          url: uploadResult.blobName, // Store blob name, not full URL
+          isPrimary: setAsPrimary,
+        },
+        authToken
+      );
+
+      // If this is primary, update other photos
+      if (setAsPrimary && !isFirstPhoto) {
+        await dabClient.setToolPhotoPrimary(id, photoRecord.id, authToken);
+      }
+
+      // Generate SAS URL for response
+      const sasResult = blobStorageService.generateSasUrl(uploadResult.blobName);
+
+      this.setStatus(201);
+      return {
+        id: photoRecord.id,
+        url: sasResult.url,
         isPrimary: setAsPrimary,
-      },
-      authToken
-    );
-
-    // If this is primary, update other photos
-    if (setAsPrimary && !isFirstPhoto) {
-      await dabClient.setToolPhotoPrimary(id, photoRecord.id, authToken);
+      };
+    } catch (error) {
+      // Cleanup orphaned blob if database operation fails
+      try {
+        await blobStorageService.deleteFile(uploadResult.blobName);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup orphaned blob:', cleanupError);
+      }
+      throw error;
     }
-
-    // Generate SAS URL for response
-    const sasResult = blobStorageService.generateSasUrl(uploadResult.blobName);
-
-    this.setStatus(201);
-    return {
-      id: photoRecord.id,
-      url: sasResult.url,
-      isPrimary: setAsPrimary,
-    };
   }
 
   /**
@@ -717,11 +727,12 @@ export class ToolsController extends Controller {
     // Delete from database
     await dabClient.deleteToolPhoto(photoId, authToken);
 
-    // If this was the primary photo and there are other photos, set a new primary
-    if (photo.isPrimary && tool.photos && tool.photos.length > 1) {
-      const remainingPhotos = tool.photos.filter(p => p.id !== photoId);
-      if (remainingPhotos.length > 0) {
-        await dabClient.setToolPhotoPrimary(toolId, remainingPhotos[0].id, authToken);
+    // If this was the primary photo, set a new primary from remaining photos
+    if (photo.isPrimary) {
+      // Refetch tool to get current state after deletion
+      const refreshedTool = await dabClient.getToolById(toolId, authToken);
+      if (refreshedTool?.photos && refreshedTool.photos.length > 0) {
+        await dabClient.setToolPhotoPrimary(toolId, refreshedTool.photos[0].id, authToken);
       }
     }
 

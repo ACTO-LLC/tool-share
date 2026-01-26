@@ -69,9 +69,9 @@ async function getAuthToken(): Promise<string | null> {
     return 'mock-e2e-token';
   }
 
-  // In mock auth mode, return a mock token
+  // In mock auth mode, return a mock token (must match API's expected mock token)
   if (useMockAuth) {
-    return 'mock-dev-token';
+    return 'mock-access-token';
   }
 
   if (!msalInstance) {

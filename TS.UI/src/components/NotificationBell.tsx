@@ -316,22 +316,20 @@ export default function NotificationBell() {
           ))
         )}
 
-        {notifications.length > 0 && (
-          <>
-            <Divider />
-            <Box sx={{ p: 1, textAlign: 'center' }}>
-              <Button
-                size="small"
-                onClick={() => {
-                  navigate('/notifications');
-                  handleClose();
-                }}
-              >
-                View all notifications
-              </Button>
-            </Box>
-          </>
-        )}
+        {notifications.length > 0 && [
+          <Divider key="view-all-divider" />,
+          <Box key="view-all-box" sx={{ p: 1, textAlign: 'center' }}>
+            <Button
+              size="small"
+              onClick={() => {
+                navigate('/notifications');
+                handleClose();
+              }}
+            >
+              View all notifications
+            </Button>
+          </Box>,
+        ]}
       </Menu>
     </>
   );

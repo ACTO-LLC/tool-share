@@ -252,6 +252,13 @@ async function verifyToken(token: string): Promise<AzureB2CTokenClaims> {
   });
 }
 
+// Mock user for development bypass mode
+const MOCK_DEV_USER: AuthenticatedUser = {
+  id: 'mock-user-001',
+  email: 'dev@localhost.com',
+  name: 'Dev User',
+};
+
 /**
  * TSOA authentication handler for Express
  * Validates Bearer tokens against Azure AD B2C
@@ -269,6 +276,12 @@ export async function expressAuthentication(
 ): Promise<AuthenticatedUser> {
   console.log('[Auth] expressAuthentication called for:', request.path);
 
+  // Bypass auth in development mode
+  if (process.env.BYPASS_AUTH === 'true') {
+    console.log('[Auth] BYPASS_AUTH enabled - returning mock user');
+    return MOCK_DEV_USER;
+  }
+
   if (securityName !== 'Bearer') {
     throw new Error('Unknown security scheme');
   }
@@ -279,6 +292,12 @@ export async function expressAuthentication(
   }
 
   const token = authHeader.substring(7);
+
+  // Accept mock token from frontend mock auth
+  if (token === 'mock-access-token') {
+    console.log('[Auth] Mock token detected - returning mock user');
+    return MOCK_DEV_USER;
+  }
 
   try {
     const decoded = await verifyToken(token);

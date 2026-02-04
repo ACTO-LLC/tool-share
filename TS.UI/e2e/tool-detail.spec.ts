@@ -140,6 +140,80 @@ test.describe('Tool Detail', () => {
   });
 });
 
+test.describe('Tool Detail Navigation', () => {
+  /**
+   * Tests that all navigation buttons on the tool detail page
+   * actually route to valid pages (no "No routes matched" errors).
+   */
+
+  test('should navigate to edit page when clicking Edit Tool on owned tool', async ({ page }) => {
+    // Navigate to one of John's tools (test-user-1 is logged in)
+    await page.goto('/tools/33333333-3333-3333-3333-333333333333');
+    await page.waitForLoadState('networkidle');
+
+    // Verify this is John's tool (Edit Tool button should be visible)
+    const editButton = page.getByRole('button', { name: /edit tool/i });
+    await expect(editButton).toBeVisible({ timeout: 5000 });
+
+    // Click Edit Tool
+    await editButton.click();
+
+    // Should navigate to the edit page (not show a blank page or route error)
+    await expect(page).toHaveURL(/\/my-tools\/edit\/.+/);
+
+    // The AddTool form should be visible (it's reused for editing)
+    await expect(page.getByText(/tool name|edit tool/i).first()).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should navigate to owner profile when clicking Profile button', async ({ page }) => {
+    // Navigate to a tool NOT owned by the test user (Jane's Pressure Washer)
+    await page.goto('/tools/99999999-9999-9999-9999-999999999999');
+    await page.waitForLoadState('networkidle');
+
+    // Click the Profile button in the Owner section
+    const profileButton = page.getByRole('button', { name: /profile/i });
+    await expect(profileButton).toBeVisible({ timeout: 5000 });
+    await profileButton.click();
+
+    // Should navigate to the user profile page
+    await expect(page).toHaveURL(/\/users\/.+/);
+
+    // Should display the user's name (Jane Smith owns this tool)
+    await expect(page.getByText(/jane smith/i)).toBeVisible({ timeout: 5000 });
+  });
+
+  test('should display user profile page with correct info', async ({ page }) => {
+    // Navigate directly to a user profile
+    await page.goto('/users/66666666-6666-6666-6666-666666666666');
+    await page.waitForLoadState('networkidle');
+
+    // Should display user name
+    await expect(page.getByRole('heading', { name: /jane smith/i })).toBeVisible({ timeout: 5000 });
+
+    // Should display avatar
+    await expect(page.locator('.MuiAvatar-root').first()).toBeVisible();
+
+    // Should display Back button
+    const backButton = page.getByRole('button', { name: /back/i });
+    await expect(backButton).toBeVisible();
+
+    // Back button should navigate away
+    await backButton.click();
+    await expect(page).not.toHaveURL(/\/users\//);
+  });
+
+  test('should show error for invalid user profile', async ({ page }) => {
+    await page.goto('/users/00000000-0000-0000-0000-000000000000');
+    await page.waitForLoadState('networkidle');
+
+    // Should show error state
+    await expect(page.getByText(/user not found/i)).toBeVisible({ timeout: 5000 });
+
+    // Should show Go Back button
+    await expect(page.getByRole('button', { name: /go back|back/i })).toBeVisible();
+  });
+});
+
 test.describe('Request to Borrow Workflow', () => {
   /**
    * Full E2E test for the reservation request flow.

@@ -419,7 +419,7 @@ export default function ToolDetail() {
               <Button
                 variant="contained"
                 fullWidth={isMobile}
-                onClick={() => navigate(`/my-tools/${id}/edit`)}
+                onClick={() => navigate(`/my-tools/edit/${id}`)}
                 sx={{ minHeight: 48 }}
               >
                 Edit Tool

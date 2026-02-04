@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -126,6 +126,8 @@ export default function AddTool() {
       advanceNoticeDays: existingTool?.advanceNoticeDays || 1,
     },
     enableReinitialize: true,
+    validateOnChange: false, // Reduce validation overhead - validate on blur instead
+    validateOnBlur: true,
     validationSchema,
     onSubmit: async (values) => {
       if (isEditMode && editId) {
@@ -157,7 +159,7 @@ export default function AddTool() {
   });
 
   // Initialize photos from existing tool
-  useState(() => {
+  useEffect(() => {
     if (existingTool?.photos) {
       setPhotos(
         existingTool.photos.map((p) => ({
@@ -170,7 +172,7 @@ export default function AddTool() {
         }))
       );
     }
-  });
+  }, [existingTool?.photos]);
 
   const handleUpcLookup = async () => {
     if (!formik.values.upc) return;
@@ -305,6 +307,22 @@ export default function AddTool() {
 
   const isSubmitting = createToolMutation.isPending || updateToolMutation.isPending || uploadingPhotos;
   const isSuccess = createToolMutation.isSuccess || updateToolMutation.isSuccess;
+
+  // Memoize slider marks to prevent re-renders
+  const maxLoanMarks = useMemo(() => [
+    { value: 1, label: '1' },
+    { value: 7, label: '7' },
+    { value: 14, label: '14' },
+    { value: 30, label: '30' },
+  ], []);
+
+  const advanceNoticeMarks = useMemo(() => [
+    { value: 0, label: '0' },
+    { value: 1, label: '1' },
+    { value: 3, label: '3' },
+    { value: 7, label: '7' },
+    { value: 14, label: '14' },
+  ], []);
 
   if (isEditMode && isLoadingTool) {
     return (
@@ -454,12 +472,7 @@ export default function AddTool() {
                   }
                   min={1}
                   max={30}
-                  marks={[
-                    { value: 1, label: '1' },
-                    { value: 7, label: '7' },
-                    { value: 14, label: '14' },
-                    { value: 30, label: '30' },
-                  ]}
+                  marks={maxLoanMarks}
                   valueLabelDisplay="auto"
                   disabled={isSubmitting}
                 />
@@ -479,13 +492,7 @@ export default function AddTool() {
                   }
                   min={0}
                   max={14}
-                  marks={[
-                    { value: 0, label: '0' },
-                    { value: 1, label: '1' },
-                    { value: 3, label: '3' },
-                    { value: 7, label: '7' },
-                    { value: 14, label: '14' },
-                  ]}
+                  marks={advanceNoticeMarks}
                   valueLabelDisplay="auto"
                   disabled={isSubmitting}
                 />

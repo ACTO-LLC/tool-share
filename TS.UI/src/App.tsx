@@ -17,6 +17,7 @@ const CircleDetail = lazy(() => import('./pages/CircleDetail'));
 const CreateCircle = lazy(() => import('./pages/CreateCircle'));
 const JoinCircle = lazy(() => import('./pages/JoinCircle'));
 const Profile = lazy(() => import('./pages/Profile'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Login = lazy(() => import('./pages/Login'));
 
@@ -75,6 +76,7 @@ function App() {
           <Route path="circles/join" element={<JoinCircle />} />
           <Route path="circles/:id" element={<CircleDetail />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="users/:id" element={<UserProfile />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
       </Routes>
